@@ -1,0 +1,31 @@
+[package]
+name = "tobdd_rust"
+version = "0.2.0"
+edition = "2021"
+authors = ["Jian Luo <crackedpoly@outlook.com>"]
+keywords = ["BDD", "Rust", "Verification"]
+
+[features]
+default = []
+profile = ['cache_stat', 'table_stat', 'op_stat']
+cache_stat = []
+table_stat = []
+op_stat = []
+
+
+[lib]
+name = "ruddy"
+path = "src/lib.rs"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[badges]
+maintenance = { status = "actively-developed" }
+
+[profile.dev]
+overflow-checks = false
+
+[profile.release]
+overflow-checks = false
+lto = true
+
+[dependencies]
