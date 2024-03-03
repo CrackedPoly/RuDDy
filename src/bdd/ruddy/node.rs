@@ -1,4 +1,4 @@
-use crate::Tobdd;
+use crate::Ruddy;
 use std::ops::{Index, IndexMut};
 
 // NOTE: 8 x u64 = 64 bytes, making a cache line
@@ -17,9 +17,9 @@ impl Default for NodeStatic {
     #[inline]
     fn default() -> Self {
         NodeStatic {
-            level: Tobdd::INVALID_LEVEL,
-            low: Tobdd::LIST_END_NODE,
-            high: Tobdd::LIST_END_NODE,
+            level: Ruddy::INVALID_LEVEL,
+            low: Ruddy::LIST_END_NODE,
+            high: Ruddy::LIST_END_NODE,
         }
     }
 }
@@ -33,7 +33,7 @@ impl Default for NodeRef {
     #[inline]
     fn default() -> Self {
         NodeRef {
-            ref_cnt: Tobdd::MIN_REF_CNT,
+            ref_cnt: Ruddy::MIN_REF_CNT,
         }
     }
 }
@@ -51,8 +51,8 @@ impl Default for NodeLink {
     #[inline]
     fn default() -> Self {
         NodeLink {
-            next: Tobdd::LIST_END_NODE,
-            hash: Tobdd::LIST_END_NODE,
+            next: Ruddy::LIST_END_NODE,
+            hash: Ruddy::LIST_END_NODE,
         }
     }
 }

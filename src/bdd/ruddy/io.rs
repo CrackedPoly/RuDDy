@@ -1,10 +1,10 @@
 use crate::bdd::{BddIO, BddManager, PrintSet, _Bdd};
-use crate::{Bdd, Tobdd};
+use crate::{Bdd, Ruddy};
 use std::collections::HashMap;
 use std::fmt::Write as FmtWrite;
 use std::io::Write as IoWrite;
 
-impl BddIO for Tobdd {
+impl BddIO for Ruddy {
     #[allow(unused_assignments)]
     fn read_buffer(&mut self, buffer: &Vec<u8>) -> Option<Bdd> {
         let mut map: HashMap<_Bdd, _Bdd> = HashMap::with_capacity(3 * buffer.len() / 2 / 16);
@@ -39,21 +39,21 @@ impl BddIO for Tobdd {
     }
 
     fn write_buffer(&self, bdd: &Bdd, buffer: &mut Vec<u8>) -> Option<usize> {
-        fn write_buffer_rec(tobdd: &Tobdd, bdd: &Bdd, buffer: &mut Vec<u8>) {
-            if bdd.0 > Tobdd::_TRUE_BDD {
+        fn write_buffer_rec(ruddy: &Ruddy, bdd: &Bdd, buffer: &mut Vec<u8>) {
+            if bdd.0 > Ruddy::_TRUE_BDD {
                 // low, high, level traversal
-                write_buffer_rec(tobdd, &Bdd(tobdd.nodes[bdd.0].low), buffer);
-                write_buffer_rec(tobdd, &Bdd(tobdd.nodes[bdd.0].high), buffer);
+                write_buffer_rec(ruddy, &Bdd(ruddy.nodes[bdd.0].low), buffer);
+                write_buffer_rec(ruddy, &Bdd(ruddy.nodes[bdd.0].high), buffer);
                 // split u32 into 4 u8
                 buffer.write_all(&bdd.0.to_le_bytes()).unwrap();
                 buffer
-                    .write_all(&tobdd.nodes[bdd.0].level.to_le_bytes())
+                    .write_all(&ruddy.nodes[bdd.0].level.to_le_bytes())
                     .unwrap();
                 buffer
-                    .write_all(&tobdd.nodes[bdd.0].low.to_le_bytes())
+                    .write_all(&ruddy.nodes[bdd.0].low.to_le_bytes())
                     .unwrap();
                 buffer
-                    .write_all(&tobdd.nodes[bdd.0].high.to_le_bytes())
+                    .write_all(&ruddy.nodes[bdd.0].high.to_le_bytes())
                     .unwrap();
             }
         }
@@ -65,37 +65,37 @@ impl BddIO for Tobdd {
     }
 }
 
-impl PrintSet for Tobdd {
+impl PrintSet for Ruddy {
     fn fmt(&self, f: &mut String, bdd: &Bdd) -> std::fmt::Result {
         fn fmt_rec(
-            tobdd: &Tobdd,
+            ruddy: &Ruddy,
             f: &mut String,
             chars: &mut Vec<char>,
             _bdd: _Bdd,
             curr: u32,
         ) -> std::fmt::Result {
-            if curr == tobdd.var_num {
-                for i in 0..tobdd.var_num as usize {
+            if curr == ruddy.var_num {
+                for i in 0..ruddy.var_num as usize {
                     f.write_char(chars[i])?;
                 }
                 f.write_str("\n")?;
                 return Ok(());
             }
-            let level = tobdd.nodes[_bdd].level;
+            let level = ruddy.nodes[_bdd].level;
             if level > curr || _bdd == 1 {
                 chars[curr as usize] = '-';
-                fmt_rec(tobdd, f, chars, _bdd, curr + 1)?;
+                fmt_rec(ruddy, f, chars, _bdd, curr + 1)?;
                 return Ok(());
             }
-            let low = tobdd.nodes[_bdd].low;
-            let high = tobdd.nodes[_bdd].high;
+            let low = ruddy.nodes[_bdd].low;
+            let high = ruddy.nodes[_bdd].high;
             if low != 0 {
                 chars[curr as usize] = '0';
-                fmt_rec(tobdd, f, chars, low, curr + 1)?;
+                fmt_rec(ruddy, f, chars, low, curr + 1)?;
             }
             if high != 0 {
                 chars[curr as usize] = '1';
-                fmt_rec(tobdd, f, chars, high, curr + 1)?;
+                fmt_rec(ruddy, f, chars, high, curr + 1)?;
             }
             Ok(())
         }

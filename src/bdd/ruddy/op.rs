@@ -1,9 +1,9 @@
-use crate::bdd::tobdd::Tobdd;
+use crate::bdd::ruddy::Ruddy;
 use crate::bdd::{Bdd, BddOp, BddOpType, _Bdd};
 #[cfg(feature = "op_stat")]
 use std::time::UNIX_EPOCH;
 
-impl Tobdd {
+impl Ruddy {
     #[inline]
     fn level(&self, _bdd: _Bdd) -> u32 {
         self.nodes[_bdd].level
@@ -20,7 +20,7 @@ impl Tobdd {
     }
 }
 
-impl Tobdd {
+impl Ruddy {
     fn _not_rec(&mut self, _bdd: _Bdd) -> _Bdd {
         if _bdd == Self::_TRUE_BDD {
             return Self::_FALSE_BDD;
@@ -155,7 +155,7 @@ impl Tobdd {
     }
 }
 
-impl BddOp for Tobdd {
+impl BddOp for Ruddy {
     #[inline]
     fn not(&mut self, bdd: Bdd) -> Bdd {
         #[cfg(feature = "op_stat")]

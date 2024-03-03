@@ -1,5 +1,5 @@
 [package]
-name = "tobdd_rust"
+name = "RuDDy"
 version = "0.2.0"
 edition = "2021"
 authors = ["Jian Luo <crackedpoly@outlook.com>"]

@@ -28,7 +28,7 @@ macro_rules! is_marked {
     };
 }
 
-pub struct Tobdd {
+pub struct Ruddy {
     nodes: Vec32<NodeStatic>,
     refs: Vec32<NodeRef>,
     links: Vec32<NodeLink>,
@@ -51,7 +51,7 @@ pub struct Tobdd {
     var_num: u32,           // the number of variables
 }
 
-impl Tobdd {
+impl Ruddy {
     const FALSE_BDD: Bdd = Bdd(0);
     const _FALSE_BDD: _Bdd = 0;
     const TRUE_BDD: Bdd = Bdd(1);
@@ -141,7 +141,7 @@ impl Display for OpStat {
     }
 }
 
-impl Tobdd {
+impl Ruddy {
     /// Initialize the BDD nodes, including FALSE, TRUE, variables, and negative variables.
     /// Initialize free node pointer and free node list.
     fn init_nodes(mut self) -> Self {
@@ -314,7 +314,7 @@ impl Tobdd {
     }
 }
 
-impl BddManager for Tobdd {
+impl BddManager for Ruddy {
     fn init(node_size: u32, cache_size: u32, var_num: u32) -> Self {
         assert!(var_num <= Self::MAX_LEVEL);
         let mut nodes = Vec32::new(node_size);
@@ -326,7 +326,7 @@ impl BddManager for Tobdd {
             links.push(NodeLink::default());
         }
 
-        Tobdd {
+        Ruddy {
             nodes,
             refs,
             links,
@@ -433,9 +433,9 @@ impl BddManager for Tobdd {
     }
 }
 
-impl Display for Tobdd {
+impl Display for Ruddy {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Tobdd Debug Information\n")?;
+        write!(f, "Ruddy Debug Information\n")?;
         for i in 0..self.node_num {
             f.write_fmt(format_args!(
                 "--------------------------- node: {} ---------------------------\n",
@@ -477,90 +477,90 @@ impl Display for Tobdd {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bdd::{tobdd, BddOp};
+    use crate::bdd::{BddOp};
 
     #[test]
-    fn test_tobdd_resize() {
+    fn test_ruddy_resize() {
         const NODE_SIZE: u32 = 10;
 
-        let mut tobdd = Tobdd::init(NODE_SIZE, NODE_SIZE, 3);
-        let a = tobdd.get_var(0);
-        let b = tobdd.get_var(1);
-        let c = tobdd.get_var(2);
+        let mut ruddy = Ruddy::init(NODE_SIZE, NODE_SIZE, 3);
+        let a = ruddy.get_var(0);
+        let b = ruddy.get_var(1);
+        let c = ruddy.get_var(2);
         // initially, there are only 2 free nodes (20% < 25%), so the resize will be triggered
-        let ab = tobdd.and(a, b);
-        tobdd.ref_bdd(ab);
-        let bc = tobdd.and(b, c);
-        tobdd.ref_bdd(bc);
-        let abc = tobdd.and(ab, bc);
-        tobdd.ref_bdd(abc);
-        assert_eq!(tobdd.node_num, NODE_SIZE * 2);
+        let ab = ruddy.and(a, b);
+        ruddy.ref_bdd(ab);
+        let bc = ruddy.and(b, c);
+        ruddy.ref_bdd(bc);
+        let abc = ruddy.and(ab, bc);
+        ruddy.ref_bdd(abc);
+        assert_eq!(ruddy.node_num, NODE_SIZE * 2);
     }
 
     #[test]
-    fn test_tobdd_gc() {
+    fn test_ruddy_gc() {
         const NODE_SIZE: u32 = 10;
 
-        let mut tobdd = Tobdd::init(NODE_SIZE, NODE_SIZE, 3);
-        let a = tobdd.get_var(0);
-        let b = tobdd.get_var(1);
-        let c = tobdd.get_var(2);
+        let mut ruddy = Ruddy::init(NODE_SIZE, NODE_SIZE, 3);
+        let a = ruddy.get_var(0);
+        let b = ruddy.get_var(1);
+        let c = ruddy.get_var(2);
         // since ab or bc are not referenced, they will be freed after gc
-        tobdd.and(a, b);
-        tobdd.and(b, c);
-        assert_eq!(tobdd.node_num, NODE_SIZE);
-        assert_eq!(tobdd.free_node_num, 1);
+        ruddy.and(a, b);
+        ruddy.and(b, c);
+        assert_eq!(ruddy.node_num, NODE_SIZE);
+        assert_eq!(ruddy.free_node_num, 1);
     }
 
     #[test]
-    fn test_tobdd_io() {
+    fn test_ruddy_io() {
         const NODE_SIZE: u32 = 10;
 
-        let mut tobdd = Tobdd::init(NODE_SIZE, NODE_SIZE, 3);
-        let a = tobdd.get_var(0);
-        let b = tobdd.get_var(1);
-        let c = tobdd.get_var(2);
+        let mut ruddy = Ruddy::init(NODE_SIZE, NODE_SIZE, 3);
+        let a = ruddy.get_var(0);
+        let b = ruddy.get_var(1);
+        let c = ruddy.get_var(2);
 
-        let ab = tobdd.and(a, b);
-        tobdd.ref_bdd(ab);
-        let bc = tobdd.and(b, c);
-        tobdd.ref_bdd(bc);
-        let abc = tobdd.and(ab, bc);
-        tobdd.ref_bdd(abc);
+        let ab = ruddy.and(a, b);
+        ruddy.ref_bdd(ab);
+        let bc = ruddy.and(b, c);
+        ruddy.ref_bdd(bc);
+        let abc = ruddy.and(ab, bc);
+        ruddy.ref_bdd(abc);
 
         let mut buffer = Vec::new();
-        let size = tobdd.write_buffer(&abc, &mut buffer).unwrap();
+        let size = ruddy.write_buffer(&abc, &mut buffer).unwrap();
         assert_eq!(size, 4 * 12);
-        let mut another = Tobdd::init(NODE_SIZE, NODE_SIZE, 3);
+        let mut another = Ruddy::init(NODE_SIZE, NODE_SIZE, 3);
         let another_abc = another.read_buffer(&buffer).unwrap();
         another.ref_bdd(another_abc);
         assert_eq!(another.node_num, NODE_SIZE * 2);
     }
 
     #[test]
-    fn test_tobdd_print_set() {
+    fn test_ruddy_print_set() {
         const NODE_SIZE: u32 = 10;
 
-        let mut tobdd = Tobdd::init(NODE_SIZE, NODE_SIZE, 3);
-        let a = tobdd.get_var(0);
-        let b = tobdd.get_var(1);
-        let c = tobdd.get_var(2);
+        let mut manager = Ruddy::init(NODE_SIZE, NODE_SIZE, 3);
+        let a = manager.get_var(0);
+        let b = manager.get_var(1);
+        let c = manager.get_var(2);
 
-        let ab = tobdd.and(a, b);
-        tobdd.ref_bdd(ab);
-        let bc = tobdd.and(b, c);
-        tobdd.ref_bdd(bc);
-        let abc = tobdd.or(ab, bc);
-        tobdd.ref_bdd(abc);
+        let ab = manager.and(a, b);
+        manager.ref_bdd(ab);
+        let bc = manager.and(b, c);
+        manager.ref_bdd(bc);
+        let abc = manager.or(ab, bc);
+        manager.ref_bdd(abc);
 
         let mut buf = String::new();
-        tobdd::PrintSet::fmt(&tobdd, &mut buf, &tobdd.get_true()).unwrap();
+        PrintSet::fmt(&manager, &mut buf, &manager.get_true()).unwrap();
         assert_eq!(buf, "TRUE\n");
         buf.clear();
-        tobdd::PrintSet::fmt(&tobdd, &mut buf, &tobdd.get_false()).unwrap();
+        PrintSet::fmt(&manager, &mut buf, &manager.get_false()).unwrap();
         assert_eq!(buf, "FALSE\n");
         buf.clear();
-        tobdd::PrintSet::fmt(&tobdd, &mut buf, &abc).unwrap();
+        PrintSet::fmt(&manager, &mut buf, &abc).unwrap();
         assert_eq!(buf, "011\n11-\n");
     }
 }

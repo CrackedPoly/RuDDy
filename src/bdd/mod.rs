@@ -1,4 +1,4 @@
-pub mod tobdd;
+pub mod ruddy;
 
 pub type _Bdd = u32;
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
