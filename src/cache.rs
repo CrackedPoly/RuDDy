@@ -33,24 +33,27 @@ pub struct BinaryCache {
 }
 
 impl UnaryCache {
-    pub fn new(table_size: u32, op: BddOpType) -> Self {
+    pub fn new(op: BddOpType) -> Self {
         match op {
-            BddOpType::Not => {
-                let table_size = prime_lte(table_size);
-                let mut table = Vec::with_capacity(table_size as usize);
-                for _ in 0..table_size {
-                    table.push(None);
-                }
-                Self {
-                    op,
-                    #[cfg(feature = "cache_stat")]
-                    stat: CacheStat::default(),
-                    table,
-                    table_size,
-                }
-            }
+            BddOpType::Not => Self {
+                op,
+                #[cfg(feature = "cache_stat")]
+                stat: CacheStat::default(),
+                table: Vec::new(),
+                table_size: 0,
+            },
             _ => panic!("Invalid unary operation"),
         }
+    }
+
+    pub fn init(&mut self, table_size: u32) {
+        let table_size = prime_lte(table_size);
+        let mut table = Vec::with_capacity(table_size as usize);
+        for _ in 0..table_size {
+            table.push(None);
+        }
+        self.table = table;
+        self.table_size = table_size;
     }
 
     #[inline]
@@ -113,24 +116,27 @@ impl Growable for UnaryCache {
 }
 
 impl BinaryCache {
-    pub fn new(table_size: u32, op: BddOpType) -> Self {
+    pub fn new(op: BddOpType) -> Self {
         match op {
-            BddOpType::And | BddOpType::Or | BddOpType::Comp => {
-                let table_size = prime_lte(table_size);
-                let mut table = Vec::with_capacity(table_size as usize);
-                for _ in 0..table_size {
-                    table.push(None);
-                }
-                Self {
-                    op,
-                    #[cfg(feature = "cache_stat")]
-                    stat: CacheStat::default(),
-                    table,
-                    table_size,
-                }
-            }
+            BddOpType::And | BddOpType::Or | BddOpType::Comp => Self {
+                op,
+                #[cfg(feature = "cache_stat")]
+                stat: CacheStat::default(),
+                table: Vec::new(),
+                table_size: 0,
+            },
             _ => panic!("Invalid binary operation"),
         }
+    }
+
+    pub fn init(&mut self, table_size: u32) {
+        let table_size = prime_lte(table_size);
+        let mut table = Vec::with_capacity(table_size as usize);
+        for _ in 0..table_size {
+            table.push(None);
+        }
+        self.table = table;
+        self.table_size = table_size;
     }
 
     #[inline]

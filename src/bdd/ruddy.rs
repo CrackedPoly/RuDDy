@@ -144,7 +144,7 @@ impl Display for OpStat {
 impl Ruddy {
     /// Initialize the BDD nodes, including FALSE, TRUE, variables, and negative variables.
     /// Initialize free node pointer and free node list.
-    fn init_nodes(mut self) -> Self {
+    fn init_nodes(&mut self) {
         // FALSE, TRUE and Variables
         self.refs[Self::_FALSE_BDD].ref_cnt = Self::MAX_REF_CNT;
         self.refs[Self::_TRUE_BDD].ref_cnt = Self::MAX_REF_CNT;
@@ -172,10 +172,10 @@ impl Ruddy {
         for i in self.free_node_ptr..self.node_num {
             self.links[i].next = i + 1;
         }
-        return self;
     }
 
     fn make_node(&mut self, level: u32, low: u32, high: u32) -> _Bdd {
+        if low == high { return low }
         #[cfg(feature = "table_stat")]
         {
             self.t_stat.unique_access += 1;
@@ -226,19 +226,19 @@ impl Ruddy {
         self.min_free_node_num = Self::MIN_FREE_RATIO * new_size / 100;
         self.free_node_num += new_size - old_size;
         // resize nodes
-        let mut new_nodes: Vec32<NodeStatic> = Vec32::new(new_size);
+        let mut new_nodes: Vec32<NodeStatic> = Vec32::with_capacity(new_size);
         for _ in 0..new_size {
             new_nodes.push(NodeStatic::default());
         }
         new_nodes.data[0..old_size as usize].copy_from_slice(&self.nodes.data);
         // resize refs
-        let mut new_refs: Vec32<NodeRef> = Vec32::new(new_size);
+        let mut new_refs: Vec32<NodeRef> = Vec32::with_capacity(new_size);
         for _ in 0..new_size {
             new_refs.push(NodeRef::default());
         }
         new_refs.data[0..old_size as usize].copy_from_slice(&self.refs.data);
         // resize links, including rehashing
-        let mut new_links: Vec32<NodeLink> = Vec32::new(new_size);
+        let mut new_links: Vec32<NodeLink> = Vec32::with_capacity(new_size);
         for _ in 0..new_size {
             new_links.push(NodeLink::default());
         }
@@ -315,68 +315,99 @@ impl Ruddy {
 }
 
 impl BddManager for Ruddy {
-    fn init(node_size: u32, cache_size: u32, var_num: u32) -> Self {
-        assert!(var_num <= Self::MAX_LEVEL);
-        let mut nodes = Vec32::new(node_size);
-        let mut refs = Vec32::new(node_size);
-        let mut links = Vec32::new(node_size);
-        for _ in 0..node_size {
-            nodes.push(NodeStatic::default());
-            refs.push(NodeRef::default());
-            links.push(NodeLink::default());
-        }
-
+    fn new() -> Self {
         Ruddy {
-            nodes,
-            refs,
-            links,
-            m_stack: Vec::with_capacity(16),
-            not_cache: UnaryCache::new(cache_size, BddOpType::Not),
-            and_cache: BinaryCache::new(cache_size, BddOpType::And),
-            or_cache: BinaryCache::new(cache_size, BddOpType::Or),
-            comp_cache: BinaryCache::new(cache_size, BddOpType::Comp),
+            nodes: Vec32::new(),
+            refs: Vec32::new(),
+            links: Vec32::new(),
+            m_stack: Vec::new(),
+            not_cache: UnaryCache::new(BddOpType::Not),
+            and_cache: BinaryCache::new(BddOpType::And),
+            or_cache: BinaryCache::new(BddOpType::Or),
+            comp_cache: BinaryCache::new(BddOpType::Comp),
             #[cfg(feature = "table_stat")]
             t_stat: TableStat::default(),
             #[cfg(feature = "op_stat")]
             op_stat: OpStat::default(),
             free_node_ptr: 0,
             free_node_num: 0,
-            min_free_node_num: Self::MIN_FREE_RATIO * node_size / 100,
-            bucket_size: prime_lte(node_size),
-            node_num: node_size,
-            var_num,
+            min_free_node_num: 0,
+            bucket_size: 0,
+            node_num: 0,
+            var_num: 0,
         }
-        .init_nodes()
     }
 
+    fn init(&mut self, node_num: u32, cache_size: u32, var_num: u32) {
+        // ensure that the number of variables is within the limit
+        assert!(var_num <= Self::MAX_LEVEL);
+        // ensure that initial node number is able to accommodate the given
+        // number of variables
+        let (n_num, c_num) = if (2 * var_num + 2) > node_num {
+            let ns = 2 * var_num + 3;
+            let cs = ns * cache_size / node_num;
+            (ns, cs)
+        } else {
+            (node_num, cache_size)
+        };
+        let mut nodes = Vec32::with_capacity(n_num);
+        let mut refs = Vec32::with_capacity(n_num);
+        let mut links = Vec32::with_capacity(n_num);
+        for _ in 0..n_num {
+            nodes.push(NodeStatic::default());
+            refs.push(NodeRef::default());
+            links.push(NodeLink::default());
+        }
+        self.nodes = nodes;
+        self.refs = refs;
+        self.links = links;
+        self.m_stack = Vec::with_capacity(16);
+        self.not_cache.init(c_num);
+        self.and_cache.init(c_num);
+        self.or_cache.init(c_num);
+        self.comp_cache.init(c_num);
+        self.min_free_node_num = Self::MIN_FREE_RATIO * n_num / 100;
+        self.bucket_size = prime_lte(n_num);
+        self.node_num = n_num;
+        self.var_num = var_num;
+        self.init_nodes();
+    }
+
+    #[inline]
     fn get_var(&self, var: u16) -> Bdd {
         return Bdd((2 * var + 2) as u32);
     }
 
+    #[inline]
     fn get_nvar(&self, var: u16) -> Bdd {
         return Bdd((2 * var + 3) as u32);
     }
 
+    #[inline]
     fn get_true(&self) -> Bdd {
         return Self::TRUE_BDD;
     }
 
+    #[inline]
     fn get_false(&self) -> Bdd {
         return Self::FALSE_BDD;
     }
 
+    #[inline]
     fn get_node_num(&self) -> u32 {
         return self.node_num - self.free_node_num;
     }
 
-    fn ref_bdd(&mut self, bdd: Bdd) -> Bdd {
+    #[inline]
+    fn ref_bdd<'a>(&mut self, bdd: &'a Bdd) -> &'a Bdd {
         if self.refs[bdd.0].ref_cnt != Self::MAX_REF_CNT {
             self.refs[bdd.0].ref_cnt += 1;
         }
         return bdd;
     }
 
-    fn deref_bdd(&mut self, bdd: Bdd) -> Bdd {
+    #[inline]
+    fn deref_bdd<'a>(&mut self, bdd: &'a Bdd) -> &'a Bdd {
         let ref_cnt = self.refs[bdd.0].ref_cnt;
         if ref_cnt > Self::MIN_REF_CNT && ref_cnt < Self::MAX_REF_CNT {
             self.refs[bdd.0].ref_cnt -= 1;
@@ -424,7 +455,7 @@ impl BddManager for Ruddy {
             self.op_stat.gc_freed += self.free_node_num as usize;
             self.op_stat.gc_time += UNIX_EPOCH.elapsed().unwrap().as_micros();
         }
-        let freed = old_free_node_num - self.free_node_num;
+        let freed = self.free_node_num - old_free_node_num;
         return if freed > 0 {
             Some(freed as usize)
         } else {
@@ -448,11 +479,9 @@ impl Display for Ruddy {
 
         f.write_fmt(format_args!("free_node_ptr: {:?}\n", self.free_node_ptr))?;
         f.write_fmt(format_args!("free_node_num: {:?}\n", self.free_node_num))?;
-        f.write_fmt(format_args!(
-            "min_free_nodes_num: {:?}\n",
-            self.min_free_node_num
-        ))?;
-        f.write_fmt(format_args!("bucket_size: {:?}\n", self.bucket_size))?;
+        f.write_fmt(format_args!("min_free_nodes_num: {:?}\n", self.min_free_node_num))?;
+        f.write_fmt(format_args!("bucket size: {:?}\n", self.bucket_size))?;
+        f.write_fmt(format_args!("m_stack capacity: {:?}\n", self.m_stack.capacity()))?;
         f.write_fmt(format_args!("node_num: {:?}\n", self.node_num))?;
         f.write_fmt(format_args!("var_num: {:?}\n", self.var_num))?;
         #[cfg(feature = "cache_stat")]
@@ -477,63 +506,67 @@ impl Display for Ruddy {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bdd::{BddOp};
+    use crate::bdd::BddOp;
 
     #[test]
     fn test_ruddy_resize() {
         const NODE_SIZE: u32 = 10;
 
-        let mut ruddy = Ruddy::init(NODE_SIZE, NODE_SIZE, 3);
-        let a = ruddy.get_var(0);
-        let b = ruddy.get_var(1);
-        let c = ruddy.get_var(2);
+        let mut manager = Ruddy::new();
+        manager.init(NODE_SIZE, NODE_SIZE, 3);
+        let a = manager.get_var(0);
+        let b = manager.get_var(1);
+        let c = manager.get_var(2);
         // initially, there are only 2 free nodes (20% < 25%), so the resize will be triggered
-        let ab = ruddy.and(a, b);
-        ruddy.ref_bdd(ab);
-        let bc = ruddy.and(b, c);
-        ruddy.ref_bdd(bc);
-        let abc = ruddy.and(ab, bc);
-        ruddy.ref_bdd(abc);
-        assert_eq!(ruddy.node_num, NODE_SIZE * 2);
+        let ab = manager.and(&a, &b);
+        manager.ref_bdd(&ab);
+        let bc = manager.and(&b, &c);
+        manager.ref_bdd(&bc);
+        let abc = manager.and(&ab, &bc);
+        manager.ref_bdd(&abc);
+        assert_eq!(manager.node_num, NODE_SIZE * 2);
     }
 
     #[test]
     fn test_ruddy_gc() {
         const NODE_SIZE: u32 = 10;
 
-        let mut ruddy = Ruddy::init(NODE_SIZE, NODE_SIZE, 3);
-        let a = ruddy.get_var(0);
-        let b = ruddy.get_var(1);
-        let c = ruddy.get_var(2);
+        let mut manager = Ruddy::new();
+        manager.init(NODE_SIZE, NODE_SIZE, 3);
+        let a = manager.get_var(0);
+        let b = manager.get_var(1);
+        let c = manager.get_var(2);
         // since ab or bc are not referenced, they will be freed after gc
-        ruddy.and(a, b);
-        ruddy.and(b, c);
-        assert_eq!(ruddy.node_num, NODE_SIZE);
-        assert_eq!(ruddy.free_node_num, 1);
+        manager.and(&a, &b);
+        manager.and(&b, &c);
+        assert_eq!(manager.node_num, NODE_SIZE);
+        assert_eq!(manager.free_node_num, 1);
     }
 
     #[test]
     fn test_ruddy_io() {
         const NODE_SIZE: u32 = 10;
 
-        let mut ruddy = Ruddy::init(NODE_SIZE, NODE_SIZE, 3);
-        let a = ruddy.get_var(0);
-        let b = ruddy.get_var(1);
-        let c = ruddy.get_var(2);
+        let mut manager = Ruddy::new();
+        manager.init(NODE_SIZE, NODE_SIZE, 3);
+        let a = manager.get_var(0);
+        let b = manager.get_var(1);
+        let c = manager.get_var(2);
 
-        let ab = ruddy.and(a, b);
-        ruddy.ref_bdd(ab);
-        let bc = ruddy.and(b, c);
-        ruddy.ref_bdd(bc);
-        let abc = ruddy.and(ab, bc);
-        ruddy.ref_bdd(abc);
+        let ab = manager.and(&a, &b);
+        manager.ref_bdd(&ab);
+        let bc = manager.and(&b, &c);
+        manager.ref_bdd(&bc);
+        let abc = manager.and(&ab, &bc);
+        manager.ref_bdd(&abc);
 
         let mut buffer = Vec::new();
-        let size = ruddy.write_buffer(&abc, &mut buffer).unwrap();
+        let size = manager.write_buffer(&abc, &mut buffer).unwrap();
         assert_eq!(size, 4 * 12);
-        let mut another = Ruddy::init(NODE_SIZE, NODE_SIZE, 3);
+        let mut another = Ruddy::new();
+        another.init(NODE_SIZE, NODE_SIZE, 3);
         let another_abc = another.read_buffer(&buffer).unwrap();
-        another.ref_bdd(another_abc);
+        another.ref_bdd(&another_abc);
         assert_eq!(another.node_num, NODE_SIZE * 2);
     }
 
@@ -541,26 +574,27 @@ mod tests {
     fn test_ruddy_print_set() {
         const NODE_SIZE: u32 = 10;
 
-        let mut manager = Ruddy::init(NODE_SIZE, NODE_SIZE, 3);
+        let mut manager = Ruddy::new();
+        manager.init(NODE_SIZE, NODE_SIZE, 3);
         let a = manager.get_var(0);
         let b = manager.get_var(1);
         let c = manager.get_var(2);
 
-        let ab = manager.and(a, b);
-        manager.ref_bdd(ab);
-        let bc = manager.and(b, c);
-        manager.ref_bdd(bc);
-        let abc = manager.or(ab, bc);
-        manager.ref_bdd(abc);
+        let ab = manager.and(&a, &b);
+        manager.ref_bdd(&ab);
+        let bc = manager.and(&b, &c);
+        manager.ref_bdd(&bc);
+        let abc = manager.or(&ab, &bc);
+        manager.ref_bdd(&abc);
 
         let mut buf = String::new();
-        PrintSet::fmt(&manager, &mut buf, &manager.get_true()).unwrap();
+        PrintSet::print(&manager, &mut buf, &manager.get_true()).unwrap();
         assert_eq!(buf, "TRUE\n");
         buf.clear();
-        PrintSet::fmt(&manager, &mut buf, &manager.get_false()).unwrap();
+        PrintSet::print(&manager, &mut buf, &manager.get_false()).unwrap();
         assert_eq!(buf, "FALSE\n");
         buf.clear();
-        PrintSet::fmt(&manager, &mut buf, &abc).unwrap();
+        PrintSet::print(&manager, &mut buf, &abc).unwrap();
         assert_eq!(buf, "011\n11-\n");
     }
 }

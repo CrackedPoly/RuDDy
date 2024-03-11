@@ -64,7 +64,12 @@ pub struct Vec32<T> {
 
 impl<T> Vec32<T> {
     #[inline]
-    pub fn new(size: u32) -> Self {
+    pub fn new() -> Self {
+        Vec32 { data: Vec::new() }
+    }
+
+    #[inline]
+    pub fn with_capacity(size: u32) -> Self {
         Vec32 {
             data: Vec::with_capacity(size as usize),
         }

@@ -22,11 +22,8 @@ impl Ruddy {
 
 impl Ruddy {
     fn _not_rec(&mut self, _bdd: _Bdd) -> _Bdd {
-        if _bdd == Self::_TRUE_BDD {
-            return Self::_FALSE_BDD;
-        }
-        if _bdd == Self::_FALSE_BDD {
-            return Self::_TRUE_BDD;
+        if _bdd <= Self::_TRUE_BDD {
+            return _bdd ^ 1;
         }
         if let Some(_bdd) = self.not_cache.get(_bdd) {
             return _bdd;
@@ -67,7 +64,7 @@ impl Ruddy {
 
         match op {
             BddOpType::And => {
-                if lhs == rhs {
+                if lhs == rhs || rhs == Self::_TRUE_BDD {
                     return lhs;
                 }
                 if lhs == Self::_FALSE_BDD || rhs == Self::_FALSE_BDD {
@@ -76,15 +73,12 @@ impl Ruddy {
                 if lhs == Self::_TRUE_BDD {
                     return rhs;
                 }
-                if rhs == Self::_TRUE_BDD {
-                    return lhs;
-                }
                 if let Some(_bdd) = self.and_cache.get((lhs, rhs)) {
                     return _bdd;
                 }
             }
             BddOpType::Or => {
-                if lhs == rhs {
+                if lhs == rhs || rhs == Self::_FALSE_BDD {
                     return lhs;
                 }
                 if lhs == Self::_TRUE_BDD || rhs == Self::_TRUE_BDD {
@@ -92,9 +86,6 @@ impl Ruddy {
                 }
                 if lhs == Self::_FALSE_BDD {
                     return rhs;
-                }
-                if rhs == Self::_FALSE_BDD {
-                    return lhs;
                 }
                 if let Some(_bdd) = self.or_cache.get((lhs, rhs)) {
                     return _bdd;
@@ -157,7 +148,7 @@ impl Ruddy {
 
 impl BddOp for Ruddy {
     #[inline]
-    fn not(&mut self, bdd: Bdd) -> Bdd {
+    fn not(&mut self, bdd: &Bdd) -> Bdd {
         #[cfg(feature = "op_stat")]
         {
             self.op_stat.not_cnt += 1;
@@ -172,7 +163,7 @@ impl BddOp for Ruddy {
     }
 
     #[inline]
-    fn and(&mut self, lhs: Bdd, rhs: Bdd) -> Bdd {
+    fn and(&mut self, lhs: &Bdd, rhs: &Bdd) -> Bdd {
         #[cfg(feature = "op_stat")]
         {
             self.op_stat.and_cnt += 1;
@@ -187,7 +178,7 @@ impl BddOp for Ruddy {
     }
 
     #[inline]
-    fn or(&mut self, lhs: Bdd, rhs: Bdd) -> Bdd {
+    fn or(&mut self, lhs: &Bdd, rhs: &Bdd) -> Bdd {
         #[cfg(feature = "op_stat")]
         {
             self.op_stat.or_cnt += 1;
@@ -202,7 +193,7 @@ impl BddOp for Ruddy {
     }
 
     #[inline]
-    fn comp(&mut self, lhs: Bdd, rhs: Bdd) -> Bdd {
+    fn comp(&mut self, lhs: &Bdd, rhs: &Bdd) -> Bdd {
         #[cfg(feature = "op_stat")]
         {
             self.op_stat.comp_cnt += 1;

@@ -1,8 +1,8 @@
 use crate::bdd::{BddIO, BddManager, PrintSet, _Bdd};
 use crate::{Bdd, Ruddy};
 use std::collections::HashMap;
-use std::fmt::Write as FmtWrite;
-use std::io::Write as IoWrite;
+use std::fmt::Write;
+use std::io::Write as _;
 
 impl BddIO for Ruddy {
     #[allow(unused_assignments)]
@@ -30,10 +30,10 @@ impl BddIO for Ruddy {
             low = *map.get(&low).unwrap();
             high = *map.get(&high).unwrap();
             ret = self.make_node(level, low, high);
-            map.insert(bdd, self.ref_bdd(Bdd(ret)).0);
+            map.insert(bdd, self.ref_bdd(&Bdd(ret)).0);
         }
         for b in map.values() {
-            self.deref_bdd(Bdd(*b));
+            self.deref_bdd(&Bdd(*b));
         }
         return Some(Bdd(ret));
     }
@@ -66,10 +66,10 @@ impl BddIO for Ruddy {
 }
 
 impl PrintSet for Ruddy {
-    fn fmt(&self, f: &mut String, bdd: &Bdd) -> std::fmt::Result {
+    fn print(&self, f: &mut dyn Write, bdd: &Bdd) -> std::fmt::Result {
         fn fmt_rec(
             ruddy: &Ruddy,
-            f: &mut String,
+            f: &mut dyn Write,
             chars: &mut Vec<char>,
             _bdd: _Bdd,
             curr: u32,
@@ -102,8 +102,8 @@ impl PrintSet for Ruddy {
 
         if bdd.0 <= Self::_TRUE_BDD {
             f.write_fmt(format_args!(
-                "{}\n",
-                if bdd.0 == 0 { "FALSE" } else { "TRUE" }
+                "{}",
+                if bdd.0 == 0 { "FALSE\n" } else { "TRUE\n" }
             ))?;
         } else {
             let mut set_chars: Vec<char> = vec![0 as char; self.var_num as usize];
