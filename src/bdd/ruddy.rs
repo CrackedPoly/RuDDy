@@ -204,7 +204,8 @@ impl Ruddy {
         }
         // check the necessary of resize
         if self.free_node_num == 1 {
-            if None == self.gc() || self.free_node_num < self.min_free_node_num {
+            self.gc();
+            if self.free_node_num < self.min_free_node_num {
                 self.resize(self.node_num * 2);
                 pos = hash_3!(level, low, high) % self.bucket_size;
             }
@@ -242,24 +243,22 @@ impl Ruddy {
         for _ in 0..new_size {
             new_links.push(NodeLink::default());
         }
-        let mut _pos = 0;
-        for i in 0..old_size {
-            _pos = hash_3!(self.nodes[i].level, self.nodes[i].low, self.nodes[i].high)
-                % self.bucket_size;
-            new_links[i].next = new_links[_pos].hash;
-            new_links[_pos].hash = i;
-        }
-        _pos = self.free_node_ptr;
-        let mut _next_free_pos = self.links[_pos].next;
-        while _next_free_pos != old_size {
-            new_links[_pos].next = _next_free_pos;
-            _pos = _next_free_pos;
-            _next_free_pos = self.links[_pos].next;
-        }
-        new_links[_pos].next = _next_free_pos;
-        // _next_free_pos == old_size
-        for i in old_size..new_size {
+        // connect the new free nodes
+        for i in (old_size..new_size).rev() {
             new_links[i].next = i + 1;
+        }
+        let mut _pos = 0;
+        for i in (0..old_size).rev() {
+            if self.nodes[i].level == Self::INVALID_LEVEL {
+                // the node is free
+                new_links[i].next = self.links[i].next;
+            } else {
+                // the node is occupied
+                _pos = hash_3!(self.nodes[i].level, self.nodes[i].low, self.nodes[i].high)
+                  % self.bucket_size;
+                new_links[i].next = new_links[_pos].hash;
+                new_links[_pos].hash = i;
+            }
         }
         self.nodes = new_nodes;
         self.refs = new_refs;
@@ -427,9 +426,10 @@ impl BddManager for Ruddy {
             self.mark_node_rec(self.m_stack[i]);
         }
         for n in 0..self.node_num {
+            // nodes in hash bucket may be freed
+            self.links[n].hash = Self::LIST_END_NODE;
             if self.refs[n].ref_cnt > 0 {
                 self.mark_node_rec(n);
-                self.links[n].hash = Self::LIST_END_NODE;
             }
         }
         // only referenced nodes are marked
@@ -469,12 +469,8 @@ impl Display for Ruddy {
         write!(f, "Ruddy Debug Information\n")?;
         for i in 0..self.node_num {
             f.write_fmt(format_args!(
-                "--------------------------- node: {} ---------------------------\n",
-                i
-            ))?;
-            f.write_fmt(format_args!("{:?}\n", self.nodes[i]))?;
-            f.write_fmt(format_args!("{:?}\n", self.refs[i]))?;
-            f.write_fmt(format_args!("{:?}\n", self.links[i]))?;
+                "idx: {}, level: {}, low: {}, high: {}, ref: {}, next: {}, hash: {}\n",
+                i, self.nodes[i].level, self.nodes[i].low, self.nodes[i].high, self.refs[i].ref_cnt, self.links[i].next, self.links[i].hash))?;
         }
 
         f.write_fmt(format_args!("free_node_ptr: {:?}\n", self.free_node_ptr))?;

@@ -1,6 +1,6 @@
 ## Nodes
 - FALSE and TRUE are node index 0 and 1 respectively with `level: INVALID_LEVEL (2147483647)`
-- The consecutive nodes are var and nvar of variables.
+- After FALSE&TRUE, The next consecutive nodes are var and nvar of variables.
 - Other nodes are initialized as `level: INVALID_LEVEL, ref_cnt: 0`
 - There are 5 types of nodes:
     - Constant: TRUE/FALSE
