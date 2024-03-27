@@ -23,10 +23,10 @@ pub trait BddManager {
     fn get_true(&self) -> Bdd;
     fn get_false(&self) -> Bdd;
     fn is_true(&self, bdd: &Bdd) -> bool {
-        return *bdd == self.get_true();
+        *bdd == self.get_true()
     }
     fn is_false(&self, bdd: &Bdd) -> bool {
-        return *bdd == self.get_false();
+        *bdd == self.get_false()
     }
     fn get_node_num(&self) -> u32;
     fn ref_bdd<'a>(&mut self, bdd: &'a Bdd) -> &'a Bdd;

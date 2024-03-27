@@ -72,7 +72,7 @@ impl UnaryCache {
         {
             self.stat.last_miss += 1;
         }
-        return None;
+        None
     }
 
     #[inline]
@@ -87,7 +87,7 @@ impl Growable for UnaryCache {
         let table_size = prime_lte(new_size);
         let mut table = Vec::with_capacity(table_size as usize);
         for i in 0..self.table_size {
-            table.push(self.table[i as usize].clone());
+            table.push(self.table[i as usize]);
         }
         for _ in self.table_size..table_size {
             table.push(None);
@@ -160,7 +160,7 @@ impl BinaryCache {
         {
             self.stat.last_miss += 1;
         }
-        return None;
+        None
     }
 
     #[inline]
@@ -180,7 +180,7 @@ impl Growable for BinaryCache {
         let table_size = prime_lte(new_size);
         let mut table = Vec::with_capacity(table_size as usize);
         for i in 0..self.table_size {
-            table.push(self.table[i as usize].clone());
+            table.push(self.table[i as usize]);
         }
         for _ in self.table_size..table_size {
             table.push(None);

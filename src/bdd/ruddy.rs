@@ -211,7 +211,7 @@ impl Ruddy {
             }
         }
         let free_idx = self.get_free_node();
-        return self.insert(pos, free_idx, level, low, high);
+        self.insert(pos, free_idx, level, low, high)
     }
 
     fn resize(&mut self, new_size: u32) {
@@ -276,7 +276,7 @@ impl Ruddy {
         let free = self.free_node_ptr;
         self.free_node_ptr = self.links[free].next;
         self.free_node_num -= 1;
-        return free;
+         free
     }
 
     /// Insert a new node at the given hash bucket.
@@ -286,7 +286,7 @@ impl Ruddy {
         self.nodes[free_pos].level = level;
         self.nodes[free_pos].low = low;
         self.nodes[free_pos].high = high;
-        return free_pos;
+         free_pos
     }
 
     fn invalidate_cache(&mut self) {
@@ -303,7 +303,7 @@ impl Ruddy {
         self.comp_cache.grow(self.comp_cache.table_size * 2);
     }
 
-    fn mark_node_rec(&mut self, bdd: _Bdd) -> () {
+    fn mark_node_rec(&mut self, bdd: _Bdd) {
         if bdd <= Self::_TRUE_BDD || is_marked!(self.nodes[bdd].level) {
             return;
         }
@@ -374,27 +374,27 @@ impl BddManager for Ruddy {
 
     #[inline]
     fn get_var(&self, var: u16) -> Bdd {
-        return Bdd((2 * var + 2) as u32);
+         Bdd((2 * var + 2) as u32)
     }
 
     #[inline]
     fn get_nvar(&self, var: u16) -> Bdd {
-        return Bdd((2 * var + 3) as u32);
+         Bdd((2 * var + 3) as u32)
     }
 
     #[inline]
     fn get_true(&self) -> Bdd {
-        return Self::TRUE_BDD;
+         Self::TRUE_BDD
     }
 
     #[inline]
     fn get_false(&self) -> Bdd {
-        return Self::FALSE_BDD;
+         Self::FALSE_BDD
     }
 
     #[inline]
     fn get_node_num(&self) -> u32 {
-        return self.node_num - self.free_node_num;
+         self.node_num - self.free_node_num
     }
 
     #[inline]
@@ -402,7 +402,7 @@ impl BddManager for Ruddy {
         if self.refs[bdd.0].ref_cnt != Self::MAX_REF_CNT {
             self.refs[bdd.0].ref_cnt += 1;
         }
-        return bdd;
+         bdd
     }
 
     #[inline]
@@ -411,7 +411,7 @@ impl BddManager for Ruddy {
         if ref_cnt > Self::MIN_REF_CNT && ref_cnt < Self::MAX_REF_CNT {
             self.refs[bdd.0].ref_cnt -= 1;
         }
-        return bdd;
+         bdd
     }
 
     fn gc(&mut self) -> Option<usize> {

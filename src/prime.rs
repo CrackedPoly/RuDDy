@@ -15,7 +15,7 @@ fn is_prime(n: u32) -> bool {
         }
         i += 2;
     }
-    return true;
+    true
 }
 
 pub fn prime_lte(n: u32) -> u32 {
@@ -26,5 +26,5 @@ pub fn prime_lte(n: u32) -> u32 {
     while !is_prime(num) {
         num -= 2;
     }
-    return num;
+    num
 }

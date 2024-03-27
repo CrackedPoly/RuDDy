@@ -41,7 +41,7 @@ impl Ruddy {
             self.m_stack.set_len(self.m_stack.len() - 2);
         }
         self.not_cache.put(_bdd, res);
-        return res;
+        res
     }
 
     fn _apply_rec(&mut self, lhs: _Bdd, rhs: _Bdd, op: BddOpType) -> _Bdd {

@@ -35,7 +35,7 @@ impl BddIO for Ruddy {
         for b in map.values() {
             self.deref_bdd(&Bdd(*b));
         }
-        return Some(Bdd(ret));
+        Some(Bdd(ret))
     }
 
     fn write_buffer(&self, bdd: &Bdd, buffer: &mut Vec<u8>) -> Option<usize> {
