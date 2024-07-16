@@ -3,10 +3,10 @@ use std::fmt::Write;
 pub mod ruddy;
 
 pub type _Bdd = u32;
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct Bdd(pub _Bdd);
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum BddOpType {
     Not,
     And,
