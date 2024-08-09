@@ -6,7 +6,7 @@ use std::io::Write as _;
 
 impl BddIO for Ruddy {
     #[allow(unused_assignments)]
-    fn read_buffer(&mut self, buffer: &Vec<u8>) -> Option<Bdd> {
+    fn read_buffer(&mut self, buffer: &[u8]) -> Option<Bdd> {
         let mut map: HashMap<_Bdd, _Bdd> = HashMap::with_capacity(3 * buffer.len() / 2 / 16);
         map.insert(0, 0);
         map.insert(1, 1);

@@ -42,7 +42,7 @@ pub trait BddOp {
 }
 
 pub trait BddIO {
-    fn read_buffer(&mut self, buffer: &Vec<u8>) -> Option<Bdd>;
+    fn read_buffer(&mut self, buffer: &[u8]) -> Option<Bdd>;
     fn write_buffer(&self, bdd: &Bdd, buffer: &mut Vec<u8>) -> Option<usize>;
 }
 
