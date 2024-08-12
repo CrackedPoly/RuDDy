@@ -15,17 +15,17 @@ impl BddIO for Ruddy {
         // merge 4 u8 into 1 u32
         for i in (0..buffer.len()).step_by(16) {
             dst.copy_from_slice(&buffer[i..i + 4]);
-            bdd = u32::from_le_bytes(dst);
+            bdd = u32::from_be_bytes(dst);
             dst.copy_from_slice(&buffer[i + 4..i + 8]);
-            level = u32::from_le_bytes(dst);
+            level = u32::from_be_bytes(dst);
             assert!(
                 level <= self.var_num,
                 "Read Error: local manager does not have Var {level}"
             );
             dst.copy_from_slice(&buffer[i + 8..i + 12]);
-            low = u32::from_le_bytes(dst);
+            low = u32::from_be_bytes(dst);
             dst.copy_from_slice(&buffer[i + 12..i + 16]);
-            high = u32::from_le_bytes(dst);
+            high = u32::from_be_bytes(dst);
 
             low = *map.get(&low).unwrap();
             high = *map.get(&high).unwrap();
@@ -45,15 +45,15 @@ impl BddIO for Ruddy {
                 write_buffer_rec(ruddy, &Bdd(ruddy.nodes[bdd.0].low), buffer);
                 write_buffer_rec(ruddy, &Bdd(ruddy.nodes[bdd.0].high), buffer);
                 // split u32 into 4 u8
-                buffer.write_all(&bdd.0.to_le_bytes()).unwrap();
+                buffer.write_all(&bdd.0.to_be_bytes()).unwrap();
                 buffer
-                    .write_all(&ruddy.nodes[bdd.0].level.to_le_bytes())
+                    .write_all(&ruddy.nodes[bdd.0].level.to_be_bytes())
                     .unwrap();
                 buffer
-                    .write_all(&ruddy.nodes[bdd.0].low.to_le_bytes())
+                    .write_all(&ruddy.nodes[bdd.0].low.to_be_bytes())
                     .unwrap();
                 buffer
-                    .write_all(&ruddy.nodes[bdd.0].high.to_le_bytes())
+                    .write_all(&ruddy.nodes[bdd.0].high.to_be_bytes())
                     .unwrap();
             }
         }
