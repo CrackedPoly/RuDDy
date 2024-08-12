@@ -16,8 +16,7 @@ pub enum BddOpType {
 }
 
 pub trait BddManager {
-    fn new() -> Self;
-    fn init(&mut self, node_num: u32, cache_size: u32, var_num: u32);
+    fn init(node_num: u32, cache_size: u32, var_num: u32) -> Self;
     fn get_var(&self, var: u16) -> Bdd;
     fn get_nvar(&self, var: u16) -> Bdd;
     fn get_true(&self) -> Bdd;
