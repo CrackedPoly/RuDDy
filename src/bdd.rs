@@ -1,5 +1,6 @@
 use std::fmt::Write;
 
+pub mod cache;
 pub mod ruddy;
 
 pub type _Bdd = u32;
@@ -30,7 +31,7 @@ pub trait BddManager {
     fn get_node_num(&self) -> u32;
     fn ref_bdd<'a>(&mut self, bdd: &'a Bdd) -> &'a Bdd;
     fn deref_bdd<'a>(&mut self, bdd: &'a Bdd) -> &'a Bdd;
-    fn gc(&mut self) -> Option<usize>;
+    fn gc(&mut self) -> usize;
 }
 
 pub trait BddOp {
@@ -42,7 +43,7 @@ pub trait BddOp {
 
 pub trait BddIO {
     fn read_buffer(&mut self, buffer: &[u8]) -> Option<Bdd>;
-    fn write_buffer(&self, bdd: &Bdd, buffer: &mut Vec<u8>) -> Option<usize>;
+    fn write_buffer(&self, bdd: &Bdd, buffer: &mut Vec<u8>) -> usize;
 }
 
 pub trait PrintSet {

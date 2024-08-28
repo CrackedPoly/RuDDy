@@ -4,8 +4,10 @@ mod op;
 
 use self::node::*;
 #[allow(unused_imports)]
-use crate::bdd::{Bdd, BddIO, BddManager, BddOpType, PrintSet, _Bdd};
-use crate::cache::{BinaryCache, Growable, UnaryCache};
+use crate::bdd::{
+    Bdd, BddIO, BddManager, BddOpType, PrintSet, _Bdd,
+    cache::{BinaryCache, Growable, UnaryCache},
+};
 use crate::hash::{hash_2, hash_3};
 use crate::prime::prime_lte;
 use std::fmt::Display;
@@ -175,7 +177,9 @@ impl Ruddy {
     }
 
     fn make_node(&mut self, level: u32, low: u32, high: u32) -> _Bdd {
-        if low == high { return low }
+        if low == high {
+            return low;
+        }
         #[cfg(feature = "table_stat")]
         {
             self.t_stat.unique_access += 1;
@@ -255,7 +259,7 @@ impl Ruddy {
             } else {
                 // the node is occupied
                 _pos = hash_3!(self.nodes[i].level, self.nodes[i].low, self.nodes[i].high)
-                  % self.bucket_size;
+                    % self.bucket_size;
                 new_links[i].next = new_links[_pos].hash;
                 new_links[_pos].hash = i;
             }
@@ -276,7 +280,7 @@ impl Ruddy {
         let free = self.free_node_ptr;
         self.free_node_ptr = self.links[free].next;
         self.free_node_num -= 1;
-         free
+        free
     }
 
     /// Insert a new node at the given hash bucket.
@@ -286,7 +290,7 @@ impl Ruddy {
         self.nodes[free_pos].level = level;
         self.nodes[free_pos].low = low;
         self.nodes[free_pos].high = high;
-         free_pos
+        free_pos
     }
 
     fn invalidate_cache(&mut self) {
@@ -372,33 +376,33 @@ impl BddManager for Ruddy {
 
     #[inline]
     fn get_var(&self, var: u16) -> Bdd {
-         Bdd((2 * var + 2) as u32)
+        Bdd((2 * var + 2) as u32)
     }
 
     #[inline]
     fn get_nvar(&self, var: u16) -> Bdd {
-         Bdd((2 * var + 3) as u32)
+        Bdd((2 * var + 3) as u32)
     }
 
     #[inline]
     fn get_true(&self) -> Bdd {
-         Self::TRUE_BDD
+        Self::TRUE_BDD
     }
 
     #[inline]
     fn get_false(&self) -> Bdd {
-         Self::FALSE_BDD
+        Self::FALSE_BDD
     }
 
     #[inline]
     fn get_node_num(&self) -> u32 {
-         self.node_num - self.free_node_num
+        self.node_num - self.free_node_num
     }
 
     #[inline]
     fn ref_bdd<'a>(&mut self, bdd: &'a Bdd) -> &'a Bdd {
         self.refs[bdd.0].ref_cnt = self.refs[bdd.0].ref_cnt.saturating_add(1);
-         bdd
+        bdd
     }
 
     #[inline]
@@ -407,7 +411,7 @@ impl BddManager for Ruddy {
         bdd
     }
 
-    fn gc(&mut self) -> Option<usize> {
+    fn gc(&mut self) -> usize {
         #[cfg(feature = "op_stat")]
         {
             self.op_stat.gc_cnt += 1;
@@ -449,11 +453,7 @@ impl BddManager for Ruddy {
             self.op_stat.gc_time += UNIX_EPOCH.elapsed().unwrap().as_micros();
         }
         let freed = self.free_node_num - old_free_node_num;
-        if freed > 0 {
-            Some(freed as usize)
-        } else {
-            None
-        }
+        freed as usize
     }
 }
 
@@ -463,14 +463,27 @@ impl Display for Ruddy {
         for i in 0..self.node_num {
             f.write_fmt(format_args!(
                 "idx: {}, level: {}, low: {}, high: {}, ref: {}, next: {}, hash: {}\n",
-                i, self.nodes[i].level, self.nodes[i].low, self.nodes[i].high, self.refs[i].ref_cnt, self.links[i].next, self.links[i].hash))?;
+                i,
+                self.nodes[i].level,
+                self.nodes[i].low,
+                self.nodes[i].high,
+                self.refs[i].ref_cnt,
+                self.links[i].next,
+                self.links[i].hash
+            ))?;
         }
 
         f.write_fmt(format_args!("free_node_ptr: {:?}\n", self.free_node_ptr))?;
         f.write_fmt(format_args!("free_node_num: {:?}\n", self.free_node_num))?;
-        f.write_fmt(format_args!("min_free_nodes_num: {:?}\n", self.min_free_node_num))?;
+        f.write_fmt(format_args!(
+            "min_free_nodes_num: {:?}\n",
+            self.min_free_node_num
+        ))?;
         f.write_fmt(format_args!("bucket size: {:?}\n", self.bucket_size))?;
-        f.write_fmt(format_args!("m_stack capacity: {:?}\n", self.m_stack.capacity()))?;
+        f.write_fmt(format_args!(
+            "m_stack capacity: {:?}\n",
+            self.m_stack.capacity()
+        ))?;
         f.write_fmt(format_args!("node_num: {:?}\n", self.node_num))?;
         f.write_fmt(format_args!("var_num: {:?}\n", self.var_num))?;
         #[cfg(feature = "cache_stat")]
@@ -547,7 +560,7 @@ mod tests {
         manager.ref_bdd(&abc);
 
         let mut buffer = Vec::new();
-        let size = manager.write_buffer(&abc, &mut buffer).unwrap();
+        let size = manager.write_buffer(&abc, &mut buffer);
         assert_eq!(size, 4 * 12);
         let mut another = Ruddy::init(NODE_SIZE, NODE_SIZE, 3);
         let another_abc = another.read_buffer(&buffer).unwrap();

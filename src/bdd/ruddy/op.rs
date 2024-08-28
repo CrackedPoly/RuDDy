@@ -110,22 +110,26 @@ impl Ruddy {
                 panic!("Not supported")
             }
         }
-        if level!(lhs) == level!(rhs) {
-            let f_low = self._apply_rec(low!(lhs), low!(rhs), op);
-            self.m_stack.push(f_low);
-            let f_high = self._apply_rec(high!(lhs), high!(rhs), op);
-            self.m_stack.push(f_high);
-        } else if level!(lhs) < level!(rhs) {
-            let f_low = self._apply_rec(low!(lhs), rhs, op);
-            self.m_stack.push(f_low);
-            let f_high = self._apply_rec(high!(lhs), rhs, op);
-            self.m_stack.push(f_high);
-        } else {
-            let f_low = self._apply_rec(lhs, low!(rhs), op);
-            self.m_stack.push(f_low);
-            let f_high = self._apply_rec(lhs, high!(rhs), op);
-            self.m_stack.push(f_high);
-        };
+        match level!(lhs).cmp(&level!(rhs)) {
+            std::cmp::Ordering::Equal => {
+                let f_low = self._apply_rec(low!(lhs), low!(rhs), op);
+                self.m_stack.push(f_low);
+                let f_high = self._apply_rec(high!(lhs), high!(rhs), op);
+                self.m_stack.push(f_high);
+            }
+            std::cmp::Ordering::Less => {
+                let f_low = self._apply_rec(low!(lhs), rhs, op);
+                self.m_stack.push(f_low);
+                let f_high = self._apply_rec(high!(lhs), rhs, op);
+                self.m_stack.push(f_high);
+            }
+            std::cmp::Ordering::Greater => {
+                let f_low = self._apply_rec(lhs, low!(rhs), op);
+                self.m_stack.push(f_low);
+                let f_high = self._apply_rec(lhs, high!(rhs), op);
+                self.m_stack.push(f_high);
+            }
+        }
         let res = self.make_node(
             std::cmp::min(level!(lhs), level!(rhs)),
             self.m_stack[self.m_stack.len() - 2],
@@ -142,7 +146,7 @@ impl Ruddy {
                 panic!("Not supported")
             }
         }
-        return res;
+        res
     }
 }
 

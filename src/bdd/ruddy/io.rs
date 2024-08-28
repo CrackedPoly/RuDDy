@@ -5,12 +5,12 @@ use std::fmt::Write;
 use std::io::Write as _;
 
 impl BddIO for Ruddy {
-    #[allow(unused_assignments)]
     fn read_buffer(&mut self, buffer: &[u8]) -> Option<Bdd> {
         let mut map: HashMap<_Bdd, _Bdd> = HashMap::with_capacity(3 * buffer.len() / 2 / 16);
         map.insert(0, 0);
         map.insert(1, 1);
         let mut dst = [0u8; 4];
+        #[allow(unused_assignments)]
         let (mut bdd, mut level, mut low, mut high, mut ret) = (0u32, 0u32, 0u32, 0u32, 0u32);
         // merge 4 u8 into 1 u32
         for i in (0..buffer.len()).step_by(16) {
@@ -38,7 +38,7 @@ impl BddIO for Ruddy {
         Some(Bdd(ret))
     }
 
-    fn write_buffer(&self, bdd: &Bdd, buffer: &mut Vec<u8>) -> Option<usize> {
+    fn write_buffer(&self, bdd: &Bdd, buffer: &mut Vec<u8>) -> usize {
         fn write_buffer_rec(ruddy: &Ruddy, bdd: &Bdd, buffer: &mut Vec<u8>) {
             if bdd.0 > Ruddy::_TRUE_BDD {
                 // low, high, level traversal
@@ -61,7 +61,7 @@ impl BddIO for Ruddy {
         let bef = buffer.len();
         write_buffer_rec(self, bdd, buffer);
         let aft = buffer.len();
-        return if aft > bef { Some(aft - bef) } else { None };
+        aft - bef
     }
 }
 
