@@ -21,19 +21,22 @@ pub trait Growable {
 #[allow(dead_code)]
 pub struct UnaryCache {
     pub op: BddOpType,
+    pub table_size: u32,
+    table: Vec<Option<Unary>>,
+
     #[cfg(feature = "cache_stat")]
     pub stat: CacheStat,
-    table: Vec<Option<Unary>>,
-    pub table_size: u32,
 }
 
 #[allow(dead_code)]
 pub struct BinaryCache {
     pub op: BddOpType,
+    pub table_size: u32,
+    pub last_hash: usize,
+    table: Vec<Option<Binary>>,
+
     #[cfg(feature = "cache_stat")]
     pub stat: CacheStat,
-    table: Vec<Option<Binary>>,
-    pub table_size: u32,
 }
 
 impl UnaryCache {
@@ -46,10 +49,10 @@ impl UnaryCache {
         match op {
             BddOpType::Not => Self {
                 op,
+                table_size: actual_size,
+                table,
                 #[cfg(feature = "cache_stat")]
                 stat: CacheStat::default(),
-                table,
-                table_size: actual_size,
             },
             _ => panic!("Invalid unary operation"),
         }
@@ -122,12 +125,17 @@ impl BinaryCache {
             table.push(None);
         }
         match op {
-            BddOpType::And | BddOpType::Or | BddOpType::Comp => Self {
+            BddOpType::And
+            | BddOpType::Or
+            | BddOpType::Comp
+            | BddOpType::QuantExist
+            | BddOpType::QuantForall => Self {
                 op,
+                table_size: actual_size,
+                last_hash: 0,
+                table,
                 #[cfg(feature = "cache_stat")]
                 stat: CacheStat::default(),
-                table,
-                table_size: actual_size,
             },
             _ => panic!("Invalid binary operation"),
         }
@@ -140,7 +148,8 @@ impl BinaryCache {
         } else {
             (key.1, key.0)
         };
-        let entry = &mut self.table[hash_2!(l, r) as usize % self.table_size as usize];
+        self.last_hash = hash_2!(l, r) as usize;
+        let entry = &mut self.table[self.last_hash % self.table_size as usize];
         if let Some(binary) = entry {
             if binary.0 == key.0 && binary.1 == key.1 {
                 #[cfg(feature = "cache_stat")]
@@ -158,13 +167,13 @@ impl BinaryCache {
     }
 
     #[inline]
-    pub fn put(&mut self, key: (Bdd, Bdd), value: Bdd) {
+    pub fn put(&mut self, hash: usize, key: (Bdd, Bdd), value: Bdd) {
         let (l, r) = if key.0 <= key.1 {
             (key.0, key.1)
         } else {
             (key.1, key.0)
         };
-        let entry = &mut self.table[hash_2!(l, r) as usize % self.table_size as usize];
+        let entry = &mut self.table[hash % self.table_size as usize];
         *entry = Some(Binary(l, r, value));
     }
 }

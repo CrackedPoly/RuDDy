@@ -1,17 +1,17 @@
 use crate::{
-    Bdd, BddIO, BddManager, BddOp, BddOpType, PrintSet,
     cache::{BinaryCache, Growable, UnaryCache},
     hash::{hash_2, hash_3},
-    prime::prime_lte,
     node::*,
+    prime::prime_lte,
+    Bdd, BddIO, BddManager, BddOp, BddOpType, PrintSet,
 };
-use std::collections::HashMap;
 use std::fmt::Write;
 use std::io::Write as _;
+use std::{collections::HashMap, mem};
 
-use std::fmt::Display;
 #[cfg(feature = "op_stat")]
 use cpu_time::ThreadTime;
+use std::fmt::Display;
 
 macro_rules! mark {
     ($level:expr) => {
@@ -37,10 +37,17 @@ pub struct Ruddy {
     links: Vec32<NodeLink>,
     m_stack: Vec<Bdd>,
 
+    quant_varset: Vec32<bool>,
+    quant_apply_op: BddOpType,
+    quant_cube: Bdd,
+    varset_last: Bdd,
+
     not_cache: UnaryCache,
     and_cache: BinaryCache,
     or_cache: BinaryCache,
     comp_cache: BinaryCache,
+    quant_exist_cache: BinaryCache,
+    quant_forall_cache: BinaryCache,
 
     #[cfg(feature = "table_stat")]
     t_stat: TableStat,
@@ -109,6 +116,12 @@ pub struct OpStat {
 
     pub comp_cnt: usize,
     pub comp_time: u128,
+
+    pub quant_exist_cnt: usize,
+    pub quant_exist_time: u128,
+
+    pub quant_forall_cnt: usize,
+    pub quant_forall_time: u128,
 
     pub gc_cnt: usize,
     pub gc_time: u128,
@@ -258,6 +271,19 @@ impl Ruddy {
         free
     }
 
+    fn prepare_varset(&mut self, mut cube: Bdd) {
+        assert!(
+            cube > Self::TRUE_BDD,
+            "Invalid varset, cube should be neither FALSE nor TRUE"
+        );
+        self.quant_varset.data.fill(false);
+        while cube > Self::TRUE_BDD {
+            self.varset_last = self.level(cube);
+            self.quant_varset[self.varset_last] = true;
+            cube = self.high(cube);
+        }
+    }
+
     /// Insert a new node at the given hash bucket.
     fn insert(&mut self, bucket_pos: u32, free_pos: u32, level: u32, low: u32, high: u32) -> Bdd {
         self.links[free_pos].next = self.links[bucket_pos].hash;
@@ -273,6 +299,8 @@ impl Ruddy {
         self.and_cache.invalidate_all();
         self.or_cache.invalidate_all();
         self.comp_cache.invalidate_all();
+        self.quant_exist_cache.invalidate_all();
+        self.quant_forall_cache.invalidate_all();
     }
 
     fn resize_cache(&mut self) {
@@ -280,6 +308,10 @@ impl Ruddy {
         self.and_cache.grow(self.and_cache.table_size * 2);
         self.or_cache.grow(self.or_cache.table_size * 2);
         self.comp_cache.grow(self.comp_cache.table_size * 2);
+        self.quant_exist_cache
+            .grow(self.quant_exist_cache.table_size * 2);
+        self.quant_forall_cache
+            .grow(self.quant_forall_cache.table_size * 2);
     }
 
     fn mark_node_rec(&mut self, bdd: Bdd) {
@@ -308,6 +340,7 @@ impl BddManager for Ruddy {
         let mut nodes = Vec32::with_capacity(n_num);
         let mut refs = Vec32::with_capacity(n_num);
         let mut links = Vec32::with_capacity(n_num);
+        let mut varset = Vec32::with_capacity(var_num);
         for _ in 0..n_num {
             nodes.push(NodeStatic::default());
             refs.push(NodeRef::default());
@@ -335,6 +368,8 @@ impl BddManager for Ruddy {
             let pos = hash_3!(i, Self::TRUE_BDD, Self::FALSE_BDD) % bucket_size;
             links[ix + 1].next = links[pos].hash;
             links[pos].hash = ix + 1;
+
+            varset.push(false);
         }
         // the rest is free nodes
         let free_node_ptr = 2 * (var_num + 1);
@@ -348,16 +383,26 @@ impl BddManager for Ruddy {
             refs,
             links,
             m_stack: Vec::with_capacity(16),
+
+            quant_varset: varset,
+            quant_apply_op: BddOpType::And,
+            quant_cube: Self::FALSE_BDD,
+            varset_last: Self::FALSE_BDD,
+
             not_cache: UnaryCache::new(BddOpType::Not, c_num),
             and_cache: BinaryCache::new(BddOpType::And, c_num),
             or_cache: BinaryCache::new(BddOpType::Or, c_num),
             comp_cache: BinaryCache::new(BddOpType::Comp, c_num),
+            quant_exist_cache: BinaryCache::new(BddOpType::QuantExist, c_num),
+            quant_forall_cache: BinaryCache::new(BddOpType::QuantForall, c_num),
+
             #[cfg(feature = "table_stat")]
             t_stat: TableStat::default(),
             #[cfg(feature = "op_stat")]
             op_stat: OpStat::default(),
             #[cfg(feature = "op_stat")]
             timer: ThreadTime::now(),
+
             free_node_ptr,
             free_node_num,
             min_free_node_num: Self::MIN_FREE_RATIO * n_num / 100,
@@ -509,7 +554,7 @@ impl Ruddy {
             };
         }
 
-        match op {
+        let hash = match op {
             BddOpType::And => {
                 if lhs == rhs || rhs == Self::TRUE_BDD {
                     return lhs;
@@ -523,6 +568,7 @@ impl Ruddy {
                 if let Some(bdd) = self.and_cache.get((lhs, rhs)) {
                     return bdd;
                 }
+                self.and_cache.last_hash
             }
             BddOpType::Or => {
                 if lhs == rhs || rhs == Self::FALSE_BDD {
@@ -537,6 +583,7 @@ impl Ruddy {
                 if let Some(bdd) = self.or_cache.get((lhs, rhs)) {
                     return bdd;
                 }
+                self.or_cache.last_hash
             }
             // lhs \ rhs
             BddOpType::Comp => {
@@ -552,11 +599,12 @@ impl Ruddy {
                 if let Some(bdd) = self.comp_cache.get((lhs, rhs)) {
                     return bdd;
                 }
+                self.comp_cache.last_hash
             }
             _ => {
                 panic!("Not supported")
             }
-        }
+        };
         match level!(lhs).cmp(&level!(rhs)) {
             std::cmp::Ordering::Equal => {
                 let f_low = self._apply_rec(low!(lhs), low!(rhs), op);
@@ -586,14 +634,72 @@ impl Ruddy {
             self.m_stack.set_len(self.m_stack.len() - 2);
         }
         match op {
-            BddOpType::And => self.and_cache.put((lhs, rhs), res),
-            BddOpType::Or => self.or_cache.put((lhs, rhs), res),
-            BddOpType::Comp => self.comp_cache.put((lhs, rhs), res),
+            BddOpType::And => self.and_cache.put(hash, (lhs, rhs), res),
+            BddOpType::Or => self.or_cache.put(hash, (lhs, rhs), res),
+            BddOpType::Comp => self.comp_cache.put(hash, (lhs, rhs), res),
             _ => {
                 panic!("Not supported")
             }
         }
         res
+    }
+
+    fn _quant_rec(&mut self, bdd: Bdd) -> Bdd {
+        let level = self.level(bdd);
+        if level > self.varset_last {
+            return bdd;
+        }
+        let hash = {
+            let cache: &mut BinaryCache = match self.quant_apply_op {
+                BddOpType::Or => &mut self.quant_exist_cache,
+                BddOpType::And => &mut self.quant_forall_cache,
+                _ => unreachable!("quantification should only use AND or OR"),
+            };
+            if let Some(res) = cache.get((bdd, self.quant_cube)) {
+                return res;
+            } else {
+                cache.last_hash
+            }
+        };
+
+        let mut low: Bdd;
+        if self.quant_varset[level] {
+            low = self.low(bdd);
+            let mut high = self.high(bdd);
+            if self.level(high) > self.level(low) {
+                mem::swap(&mut low, &mut high);
+            }
+            low = self._quant_rec(low);
+
+            if !((self.quant_apply_op == BddOpType::And && low == Self::FALSE_BDD)
+                || (self.quant_apply_op == BddOpType::Or && low == Self::TRUE_BDD))
+            {
+                self.m_stack.push(low);
+                high = self._quant_rec(high);
+                self.m_stack.push(high);
+                low = self._apply_rec(low, high, self.quant_apply_op);
+                unsafe {
+                    self.m_stack.set_len(self.m_stack.len() - 2);
+                }
+            }
+        } else {
+            low = self._quant_rec(self.low(bdd));
+            self.m_stack.push(low);
+            let high = self._quant_rec(self.high(bdd));
+            self.m_stack.push(high);
+            low = self.make_node(level, low, high);
+            unsafe {
+                self.m_stack.set_len(self.m_stack.len() - 2);
+            }
+        }
+
+        let cache: &mut BinaryCache = match self.quant_apply_op {
+            BddOpType::Or => &mut self.quant_exist_cache,
+            BddOpType::And => &mut self.quant_forall_cache,
+            _ => unreachable!("quantification should only use AND or OR"),
+        };
+        cache.put(hash, (bdd, self.quant_cube), low);
+        low
     }
 }
 
@@ -654,6 +760,40 @@ impl BddOp for Ruddy {
         #[cfg(feature = "op_stat")]
         {
             self.op_stat.comp_time += self.timer.elapsed().as_micros();
+        }
+        ret
+    }
+
+    fn exist(&mut self, bdd: Bdd, cube: Bdd) -> Bdd {
+        self.quant_apply_op = BddOpType::Or;
+        self.quant_cube = cube;
+        self.prepare_varset(cube);
+        #[cfg(feature = "op_stat")]
+        {
+            self.op_stat.quant_exist_cnt += 1;
+            self.op_stat.quant_exist_time -= self.timer.elapsed().as_micros();
+        }
+        let ret = self._quant_rec(bdd);
+        #[cfg(feature = "op_stat")]
+        {
+            self.op_stat.quant_exist_time += self.timer.elapsed().as_micros();
+        }
+        ret
+    }
+
+    fn forall(&mut self, bdd: Bdd, cube: Bdd) -> Bdd {
+        self.quant_apply_op = BddOpType::And;
+        self.quant_cube = cube;
+        self.prepare_varset(cube);
+        #[cfg(feature = "op_stat")]
+        {
+            self.op_stat.quant_forall_cnt += 1;
+            self.op_stat.quant_forall_time -= self.timer.elapsed().as_micros();
+        }
+        let ret = self._quant_rec(bdd);
+        #[cfg(feature = "op_stat")]
+        {
+            self.op_stat.quant_forall_time += self.timer.elapsed().as_micros();
         }
         ret
     }
@@ -903,5 +1043,72 @@ mod tests {
         buf.clear();
         PrintSet::print(&manager, &mut buf, abc).unwrap();
         assert_eq!(buf, "011\n11-\n");
+    }
+
+    #[test]
+    fn test_ruddy_exist() {
+        const NODE_SIZE: u32 = 10;
+
+        let mut manager = Ruddy::init(NODE_SIZE, NODE_SIZE, 3);
+        let a = manager.get_var(0);
+        let b = manager.get_var(1);
+        let c = manager.get_var(2);
+
+        let ab = manager.and(a, b);
+        manager.ref_bdd(ab);
+        let bc = manager.and(b, c);
+        manager.ref_bdd(bc);
+        let abc = manager.or(ab, bc);
+        manager.ref_bdd(abc);
+
+        let mut buf = String::new();
+
+        let exist_a = manager.exist(abc, a);
+        PrintSet::print(&manager, &mut buf, exist_a).unwrap();
+        assert_eq!(buf, "-1-\n");
+        buf.clear();
+
+        let exist_ab = manager.exist(abc, ab);
+        PrintSet::print(&manager, &mut buf, exist_ab).unwrap();
+        assert_eq!(buf, "TRUE\n");
+        buf.clear();
+
+        let exist_b = manager.exist(abc, b);
+        PrintSet::print(&manager, &mut buf, exist_b).unwrap();
+        assert_eq!(buf, "0-1\n1--\n");
+        buf.clear();
+    }
+
+    #[test]
+    fn test_ruddy_forall() {
+        const NODE_SIZE: u32 = 10;
+
+        let mut manager = Ruddy::init(NODE_SIZE, NODE_SIZE, 3);
+        let a = manager.get_var(0);
+        let b = manager.get_var(1);
+        let c = manager.get_var(2);
+
+        let ab = manager.or(a, b);
+        manager.ref_bdd(ab);
+        let bc = manager.or(b, c);
+        manager.ref_bdd(bc);
+        let abc = manager.and(ab, bc);
+        manager.ref_bdd(abc);
+
+        let mut buf = String::new();
+
+        PrintSet::print(&manager, &mut buf, ab).unwrap();
+        assert_eq!(buf, "01-\n1--\n");
+        buf.clear();
+
+        let forall_a = manager.forall(ab, a);
+        PrintSet::print(&manager, &mut buf, forall_a).unwrap();
+        assert_eq!(buf, "-1-\n");
+        buf.clear();
+
+        let forall_c = manager.forall(ab, c);
+        PrintSet::print(&manager, &mut buf, forall_c).unwrap();
+        assert_eq!(buf, "01-\n1--\n");
+        buf.clear();
     }
 }

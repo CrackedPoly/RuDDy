@@ -15,6 +15,8 @@ pub enum BddOpType {
     And,
     Or,
     Comp, // Complement: X \ Y
+    QuantExist,
+    QuantForall,
 }
 
 pub trait BddManager {
@@ -36,10 +38,15 @@ pub trait BddManager {
 }
 
 pub trait BddOp {
+    // propositional logic operations
     fn not(&mut self, bdd: Bdd) -> Bdd;
     fn and(&mut self, lhs: Bdd, rhs: Bdd) -> Bdd;
     fn or(&mut self, lhs: Bdd, rhs: Bdd) -> Bdd;
     fn comp(&mut self, lhs: Bdd, rhs: Bdd) -> Bdd;
+
+    // first-order logic operations
+    fn exist(&mut self, bdd: Bdd, cube: Bdd) -> Bdd;
+    fn forall(&mut self, bdd: Bdd, cube: Bdd) -> Bdd;
 }
 
 pub trait BddIO {

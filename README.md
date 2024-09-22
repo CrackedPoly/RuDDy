@@ -7,7 +7,8 @@ This branch is able to fulfill the basic requirements of
 [DPV](https://dl.acm.org/doi/10.1145/3544216.3544246).
 
 ### Done
-- [x] BDD operations (not, and, or, comp)
+- [x] propositional logic operations (not, and, or, comp)
+- [x] first-order logic operations (exists, forall)
 - [x] BDD set printing
 - [x] BDD serialization
 - [x] Garbage collection
@@ -19,7 +20,6 @@ This branch is able to fulfill the basic requirements of
 - [ ] BDD dot file printing
 
 ### No plans
-- [ ] BDD operations (xor, nand, sat, exist, forall, etc.) 
 - [ ] BDD variable reordering
 - [ ] Adding variables on the fly
 

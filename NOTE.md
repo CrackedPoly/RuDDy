@@ -13,6 +13,7 @@
   - Intermediate: occupied but not directly referenced nodes, MAY or MAY NOT be
   cleaned up in next GC
   - Free: free nodes
+- Variables in BDD is ascending ordered.
 
 ## Secrets
 

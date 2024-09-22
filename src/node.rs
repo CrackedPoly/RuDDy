@@ -1,5 +1,5 @@
-use std::ops::{Index, IndexMut};
 use crate::ruddy::Ruddy;
+use std::ops::{Index, IndexMut};
 
 // NOTE: 8 x u64 = 64 bytes, making a cache line
 // Why don't put the NodeStatic, NodeRef, and NodeLink in the same struct?
@@ -89,4 +89,3 @@ impl<T> IndexMut<u32> for Vec32<T> {
         &mut self.data[index as usize]
     }
 }
-
