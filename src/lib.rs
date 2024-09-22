@@ -1,56 +1,52 @@
-mod bdd;
 mod cache;
+mod hash;
+mod node;
+mod prime;
+mod ruddy;
 
-pub use bdd::ruddy::Ruddy;
-pub use bdd::Bdd;
-pub use bdd::{BddIO, BddManager, BddOp, PrintSet};
+pub use ruddy::Ruddy;
+use std::fmt::Write;
 
-mod prime {
-    fn is_prime(n: u32) -> bool {
-        if n < 2 {
-            return false;
-        }
-        if n == 2 {
-            return true;
-        }
-        if n % 2 == 0 {
-            return false;
-        }
-        let mut i = 3;
-        while i * i <= n {
-            if n % i == 0 {
-                return false;
-            }
-            i += 2;
-        }
-        true
-    }
+pub type Bdd = u32;
 
-    pub fn prime_lte(n: u32) -> u32 {
-        let mut num = n;
-        if n % 2 == 0 {
-            num -= 1;
-        }
-        while !is_prime(num) {
-            num -= 2;
-        }
-        num
-    }
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum BddOpType {
+    Not,
+    And,
+    Or,
+    Comp, // Complement: X \ Y
 }
 
-mod hash {
-    macro_rules! hash_2 {
-        ($a:expr, $b:expr) => {
-            (($a + $b) * ($a + $b + 1) >> 1) + $a
-        };
+pub trait BddManager {
+    fn init(node_num: u32, cache_size: u32, var_num: u32) -> Self;
+    fn get_var(&self, var: u16) -> Bdd;
+    fn get_nvar(&self, var: u16) -> Bdd;
+    fn get_true(&self) -> Bdd;
+    fn get_false(&self) -> Bdd;
+    fn is_true(&self, bdd: Bdd) -> bool {
+        bdd == self.get_true()
     }
-
-    macro_rules! hash_3 {
-        ($a:expr, $b:expr, $c:expr) => {
-            hash_2!(hash_2!($a, $b), $c)
-        };
+    fn is_false(&self, bdd: Bdd) -> bool {
+        bdd == self.get_false()
     }
+    fn get_node_num(&self) -> u32;
+    fn ref_bdd(&mut self, bdd: Bdd) -> Bdd;
+    fn deref_bdd(&mut self, bdd: Bdd) -> Bdd;
+    fn gc(&mut self) -> usize;
+}
 
-    pub(crate) use hash_2;
-    pub(crate) use hash_3;
+pub trait BddOp {
+    fn not(&mut self, bdd: Bdd) -> Bdd;
+    fn and(&mut self, lhs: Bdd, rhs: Bdd) -> Bdd;
+    fn or(&mut self, lhs: Bdd, rhs: Bdd) -> Bdd;
+    fn comp(&mut self, lhs: Bdd, rhs: Bdd) -> Bdd;
+}
+
+pub trait BddIO {
+    fn read_buffer(&mut self, buffer: &[u8]) -> Option<Bdd>;
+    fn write_buffer(&self, bdd: Bdd, buffer: &mut Vec<u8>) -> usize;
+}
+
+pub trait PrintSet {
+    fn print(&self, f: &mut dyn Write, bdd: Bdd) -> std::fmt::Result;
 }

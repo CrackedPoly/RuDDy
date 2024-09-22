@@ -7,10 +7,10 @@ keywords = ["BDD", "Rust", "Verification"]
 
 [features]
 default = []
-profile = ['cache_stat', 'table_stat', 'op_stat']
-cache_stat = []
-table_stat = []
-op_stat = []
+profile = ["cache_stat", "table_stat", "op_stat"]
+cache_stat = ["dep:cpu-time"]
+table_stat = ["dep:cpu-time"]
+op_stat = ["dep:cpu-time"]
 
 
 [lib]
@@ -29,3 +29,4 @@ overflow-checks = false
 lto = true
 
 [dependencies]
+cpu-time = { version = "1.0.0", optional = true }
