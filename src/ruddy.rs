@@ -490,8 +490,7 @@ impl BddManager for Ruddy {
             self.op_stat.gc_freed += self.free_node_num as usize;
             self.op_stat.gc_time += self.timer.elapsed().as_micros();
         }
-        let freed = self.free_node_num - old_free_node_num;
-        freed as usize
+        (self.free_node_num - old_free_node_num) as usize
     }
 }
 
@@ -989,8 +988,9 @@ mod tests {
         // since ab or bc are not referenced, they will be freed after gc
         manager.and(a, b);
         manager.and(b, c);
+        manager.gc();
         assert_eq!(manager.node_num, NODE_SIZE);
-        assert_eq!(manager.free_node_num, 1);
+        assert_eq!(manager.free_node_num, 2);
     }
 
     #[test]
