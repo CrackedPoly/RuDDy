@@ -5,7 +5,7 @@ use crate::{
     prime::prime_lte,
     Bdd, BddIO, BddManager, BddOp, BddOpType, PrintSet,
 };
-use std::fmt::Write;
+use std::fmt::{Debug, Write};
 use std::io::Write as _;
 use std::{collections::HashMap, mem};
 
@@ -798,7 +798,7 @@ impl BddOp for Ruddy {
     }
 }
 
-impl Display for Ruddy {
+impl Debug for Ruddy {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Ruddy Debug Information")?;
         for i in 0..self.node_num {
