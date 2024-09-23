@@ -927,7 +927,7 @@ impl PrintSet for Ruddy {
             }
             let level = ruddy.nodes[_bdd].level;
             if level > curr || _bdd == 1 {
-                chars[curr as usize] = '-';
+                chars[curr as usize] = '*';
                 fmt_rec(ruddy, f, chars, _bdd, curr + 1)?;
                 return Ok(());
             }
@@ -1064,7 +1064,7 @@ mod tests {
         assert_eq!(buf, "FALSE\n");
         buf.clear();
         PrintSet::print(&manager, &mut buf, abc).unwrap();
-        assert_eq!(buf, "011\n11-\n");
+        assert_eq!(buf, "011\n11*\n");
     }
 
     #[test]
@@ -1087,7 +1087,7 @@ mod tests {
 
         let exist_a = manager.exist(abc, a);
         PrintSet::print(&manager, &mut buf, exist_a).unwrap();
-        assert_eq!(buf, "-1-\n");
+        assert_eq!(buf, "*1*\n");
         buf.clear();
 
         let exist_ab = manager.exist(abc, ab);
@@ -1097,7 +1097,7 @@ mod tests {
 
         let exist_b = manager.exist(abc, b);
         PrintSet::print(&manager, &mut buf, exist_b).unwrap();
-        assert_eq!(buf, "0-1\n1--\n");
+        assert_eq!(buf, "0*1\n1**\n");
         buf.clear();
     }
 
@@ -1120,17 +1120,17 @@ mod tests {
         let mut buf = String::new();
 
         PrintSet::print(&manager, &mut buf, ab).unwrap();
-        assert_eq!(buf, "01-\n1--\n");
+        assert_eq!(buf, "01*\n1**\n");
         buf.clear();
 
         let forall_a = manager.forall(ab, a);
         PrintSet::print(&manager, &mut buf, forall_a).unwrap();
-        assert_eq!(buf, "-1-\n");
+        assert_eq!(buf, "*1*\n");
         buf.clear();
 
         let forall_c = manager.forall(ab, c);
         PrintSet::print(&manager, &mut buf, forall_c).unwrap();
-        assert_eq!(buf, "01-\n1--\n");
+        assert_eq!(buf, "01*\n1**\n");
         buf.clear();
     }
 }
