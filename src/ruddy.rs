@@ -11,7 +11,6 @@ use std::{collections::HashMap, mem};
 
 #[cfg(feature = "op_stat")]
 use cpu_time::ThreadTime;
-use std::fmt::Display;
 
 macro_rules! mark {
     ($level:expr) => {
@@ -373,8 +372,8 @@ impl BddManager for Ruddy {
         }
         // the rest is free nodes
         let free_node_ptr = 2 * (var_num + 1);
-        let free_node_num = node_num - free_node_ptr;
-        for i in free_node_ptr..node_num {
+        let free_node_num = n_num - free_node_ptr;
+        for i in free_node_ptr..n_num {
             links[i].next = i + 1;
         }
 
@@ -407,7 +406,7 @@ impl BddManager for Ruddy {
             free_node_num,
             min_free_node_num: Self::MIN_FREE_RATIO * n_num / 100,
             bucket_size,
-            node_num,
+            node_num: n_num,
             var_num,
         }
     }
@@ -445,6 +444,9 @@ impl BddManager for Ruddy {
 
     #[inline]
     fn deref_bdd(&mut self, bdd: Bdd) -> Bdd {
+        if bdd < 2 * self.var_num + 2 {
+            return bdd
+        }
         self.refs[bdd].ref_cnt = self.refs[bdd].ref_cnt.saturating_sub(1);
         bdd
     }
@@ -958,6 +960,26 @@ impl PrintSet for Ruddy {
 mod tests {
     use super::*;
     use crate::BddOp;
+
+    #[test]
+    fn test_ruddy_and() {
+        const NODE_SIZE: u32 = 10;
+
+        let mut manager = Ruddy::init(NODE_SIZE, NODE_SIZE, 3);
+        let a = manager.get_nvar(0);
+        let b = manager.get_nvar(1);
+        let c = manager.get_nvar(2);
+
+        let mut buf = String::new();
+        let and_ab = manager.and(a, b);
+        manager.ref_bdd(and_ab);
+        let and_abc = manager.and(and_ab, c);
+        manager.ref_bdd(and_abc);
+
+        manager.print(&mut buf, and_abc).unwrap();
+
+        assert_eq!(buf, "000\n");
+    }
 
     #[test]
     fn test_ruddy_resize() {
