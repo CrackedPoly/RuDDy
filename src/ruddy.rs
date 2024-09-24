@@ -5,9 +5,9 @@ use crate::{
     prime::prime_lte,
     Bdd, BddIO, BddManager, BddOp, BddOpType, PrintSet,
 };
-use std::fmt::{Debug, Write};
-use std::io::Write as _;
-use std::{collections::HashMap, mem};
+#[allow(unused_imports)]
+use std::fmt::{Debug, Display, Write};
+use std::{collections::HashMap, io::Write as _, mem};
 
 #[cfg(feature = "op_stat")]
 use cpu_time::ThreadTime;
@@ -445,7 +445,7 @@ impl BddManager for Ruddy {
     #[inline]
     fn deref_bdd(&mut self, bdd: Bdd) -> Bdd {
         if bdd < 2 * self.var_num + 2 {
-            return bdd
+            return bdd;
         }
         self.refs[bdd].ref_cnt = self.refs[bdd].ref_cnt.saturating_sub(1);
         bdd
@@ -519,7 +519,7 @@ impl Ruddy {
             return bdd ^ 1;
         }
         if let Some(_bdd) = self.not_cache.get(bdd) {
-            return bdd;
+            return _bdd;
         }
         let f_low = self._not_rec(self.low(bdd));
         self.m_stack.push(f_low);
@@ -977,8 +977,32 @@ mod tests {
         manager.ref_bdd(and_abc);
 
         manager.print(&mut buf, and_abc).unwrap();
-
         assert_eq!(buf, "000\n");
+
+        manager.deref_bdd(and_ab);
+        manager.deref_bdd(and_abc);
+    }
+
+    #[test]
+    fn test_ruddy_comp() {
+        const NODE_SIZE: u32 = 20;
+
+        let mut manager = Ruddy::init(NODE_SIZE, NODE_SIZE, 3);
+        let a = manager.get_var(0);
+        let nb = manager.get_nvar(1);
+        let _c = manager.get_var(2);
+
+        let mut buf = String::new();
+        let or_a_nb = manager.and(a, nb);
+        manager.ref_bdd(or_a_nb);
+        let comp = manager.comp(a, or_a_nb);
+        manager.ref_bdd(comp);
+
+        manager.print(&mut buf, comp).unwrap();
+        assert_eq!(buf, "11*\n");
+
+        manager.deref_bdd(or_a_nb);
+        manager.deref_bdd(comp);
     }
 
     #[test]
@@ -996,7 +1020,12 @@ mod tests {
         manager.ref_bdd(bc);
         let abc = manager.and(ab, bc);
         manager.ref_bdd(abc);
+
         assert_eq!(manager.node_num, NODE_SIZE * 2);
+
+        manager.deref_bdd(ab);
+        manager.deref_bdd(bc);
+        manager.deref_bdd(abc);
     }
 
     #[test]
@@ -1011,6 +1040,7 @@ mod tests {
         manager.and(a, b);
         manager.and(b, c);
         manager.gc();
+
         assert_eq!(manager.node_num, NODE_SIZE);
         assert_eq!(manager.free_node_num, 2);
     }
@@ -1034,10 +1064,16 @@ mod tests {
         let mut buffer = Vec::new();
         let size = manager.write_buffer(abc, &mut buffer);
         assert_eq!(size, 4 * 12);
-        let mut another = Ruddy::init(NODE_SIZE, NODE_SIZE, 3);
-        let another_abc = another.read_buffer(&buffer).unwrap();
-        another.ref_bdd(another_abc);
-        assert_eq!(another.node_num, NODE_SIZE * 2);
+
+        let mut another_manager = Ruddy::init(NODE_SIZE, NODE_SIZE, 3);
+        let another_abc = another_manager.read_buffer(&buffer).unwrap();
+        another_manager.ref_bdd(another_abc);
+        assert_eq!(another_manager.node_num, NODE_SIZE * 2);
+
+        manager.deref_bdd(ab);
+        manager.deref_bdd(bc);
+        manager.deref_bdd(abc);
+        another_manager.deref_bdd(another_abc);
     }
 
     #[test]
@@ -1065,6 +1101,10 @@ mod tests {
         buf.clear();
         PrintSet::print(&manager, &mut buf, abc).unwrap();
         assert_eq!(buf, "011\n11*\n");
+
+        manager.deref_bdd(ab);
+        manager.deref_bdd(bc);
+        manager.deref_bdd(abc);
     }
 
     #[test]
@@ -1099,6 +1139,10 @@ mod tests {
         PrintSet::print(&manager, &mut buf, exist_b).unwrap();
         assert_eq!(buf, "0*1\n1**\n");
         buf.clear();
+
+        manager.deref_bdd(ab);
+        manager.deref_bdd(bc);
+        manager.deref_bdd(abc);
     }
 
     #[test]
@@ -1132,5 +1176,9 @@ mod tests {
         PrintSet::print(&manager, &mut buf, forall_c).unwrap();
         assert_eq!(buf, "01*\n1**\n");
         buf.clear();
+
+        manager.deref_bdd(ab);
+        manager.deref_bdd(bc);
+        manager.deref_bdd(abc);
     }
 }
