@@ -5,7 +5,7 @@ mod prime;
 mod ruddy;
 
 pub use ruddy::Ruddy;
-use std::fmt::Write;
+use std::io::{Read as IoRead, Result as IoResult, Write as IoWrite};
 
 pub type Bdd = u32;
 
@@ -49,11 +49,11 @@ pub trait BddOp {
     fn forall(&mut self, bdd: Bdd, cube: Bdd) -> Bdd;
 }
 
-pub trait BddIO {
-    fn read_buffer(&mut self, buffer: &[u8]) -> Option<Bdd>;
-    fn write_buffer(&self, bdd: Bdd, buffer: &mut Vec<u8>) -> usize;
+pub trait BddIO<W: IoWrite, R: IoRead> {
+    fn serialize(&self, bdd: Bdd, writer: &mut W) -> IoResult<()>;
+    fn deserialize(&mut self, reader: &mut R) -> IoResult<Bdd>;
 }
 
-pub trait PrintSet {
-    fn print(&self, f: &mut dyn Write, bdd: Bdd) -> std::fmt::Result;
+pub trait PrintSet<W: IoWrite> {
+    fn print(&self, bdd: Bdd, writer: &mut W) -> IoResult<()>;
 }

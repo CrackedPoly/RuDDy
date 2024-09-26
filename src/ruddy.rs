@@ -5,9 +5,13 @@ use crate::{
     prime::prime_lte,
     Bdd, BddIO, BddManager, BddOp, BddOpType, PrintSet,
 };
+use nohash::{BuildNoHashHasher, IntMap};
 #[allow(unused_imports)]
-use std::fmt::{Debug, Display, Write};
-use std::{collections::HashMap, io::Write as _, mem};
+use std::fmt::{Debug, Display};
+use std::{
+    io::{Read as IoRead, Result as IoResult, Write as IoWrite},
+    mem,
+};
 
 #[cfg(feature = "op_stat")]
 use cpu_time::ThreadTime;
@@ -848,28 +852,50 @@ impl Debug for Ruddy {
     }
 }
 
-impl BddIO for Ruddy {
-    fn read_buffer(&mut self, buffer: &[u8]) -> Option<Bdd> {
-        let mut map: HashMap<Bdd, Bdd> = HashMap::with_capacity(3 * buffer.len() / 2 / 16);
+impl<W: IoWrite, R: IoRead> BddIO<W, R> for Ruddy {
+    fn serialize(&self, bdd: Bdd, writer: &mut W) -> IoResult<()> {
+        fn write_buffer_rec<W: IoWrite>(ruddy: &Ruddy, bdd: Bdd, writer: &mut W) {
+            if bdd > Ruddy::TRUE_BDD {
+                // low, high, level traversal
+                write_buffer_rec(ruddy, ruddy.nodes[bdd].low, writer);
+                write_buffer_rec(ruddy, ruddy.nodes[bdd].high, writer);
+                // split u32 into 4 u8
+                writer.write_all(&bdd.to_be_bytes()).unwrap();
+                writer
+                    .write_all(&ruddy.nodes[bdd].level.to_be_bytes())
+                    .unwrap();
+                writer
+                    .write_all(&ruddy.nodes[bdd].low.to_be_bytes())
+                    .unwrap();
+                writer
+                    .write_all(&ruddy.nodes[bdd].high.to_be_bytes())
+                    .unwrap();
+            }
+        }
+
+        write_buffer_rec(self, bdd, writer);
+        writer.flush()?;
+        Ok(())
+    }
+
+    fn deserialize(&mut self, reader: &mut R) -> IoResult<Bdd> {
+        let mut map: IntMap<Bdd, Bdd> =
+            IntMap::with_capacity_and_hasher(16, BuildNoHashHasher::default());
         map.insert(0, 0);
         map.insert(1, 1);
-        let mut dst = [0u8; 4];
         #[allow(unused_assignments)]
         let (mut bdd, mut level, mut low, mut high, mut ret) = (0u32, 0u32, 0u32, 0u32, 0u32);
+        let mut window = [0u8; 16];
         // merge 4 u8 into 1 u32
-        for i in (0..buffer.len()).step_by(16) {
-            dst.copy_from_slice(&buffer[i..i + 4]);
-            bdd = u32::from_be_bytes(dst);
-            dst.copy_from_slice(&buffer[i + 4..i + 8]);
-            level = u32::from_be_bytes(dst);
+        while let Ok(()) = reader.read_exact(&mut window) {
+            bdd = u32::from_be_bytes(window[0..4].try_into().unwrap());
+            level = u32::from_be_bytes(window[4..8].try_into().unwrap());
             assert!(
                 level <= self.var_num,
                 "Read Error: local manager does not have Var {level}"
             );
-            dst.copy_from_slice(&buffer[i + 8..i + 12]);
-            low = u32::from_be_bytes(dst);
-            dst.copy_from_slice(&buffer[i + 12..i + 16]);
-            high = u32::from_be_bytes(dst);
+            low = u32::from_be_bytes(window[8..12].try_into().unwrap());
+            high = u32::from_be_bytes(window[12..16].try_into().unwrap());
 
             low = *map.get(&low).unwrap();
             high = *map.get(&high).unwrap();
@@ -879,50 +905,24 @@ impl BddIO for Ruddy {
         for b in map.values() {
             self.deref_bdd(*b);
         }
-        Some(ret)
-    }
-
-    fn write_buffer(&self, bdd: Bdd, buffer: &mut Vec<u8>) -> usize {
-        fn write_buffer_rec(ruddy: &Ruddy, bdd: Bdd, buffer: &mut Vec<u8>) {
-            if bdd > Ruddy::TRUE_BDD {
-                // low, high, level traversal
-                write_buffer_rec(ruddy, ruddy.nodes[bdd].low, buffer);
-                write_buffer_rec(ruddy, ruddy.nodes[bdd].high, buffer);
-                // split u32 into 4 u8
-                buffer.write_all(&bdd.to_be_bytes()).unwrap();
-                buffer
-                    .write_all(&ruddy.nodes[bdd].level.to_be_bytes())
-                    .unwrap();
-                buffer
-                    .write_all(&ruddy.nodes[bdd].low.to_be_bytes())
-                    .unwrap();
-                buffer
-                    .write_all(&ruddy.nodes[bdd].high.to_be_bytes())
-                    .unwrap();
-            }
-        }
-
-        let bef = buffer.len();
-        write_buffer_rec(self, bdd, buffer);
-        let aft = buffer.len();
-        aft - bef
+        Ok(ret)
     }
 }
 
-impl PrintSet for Ruddy {
-    fn print(&self, f: &mut dyn Write, bdd: Bdd) -> std::fmt::Result {
-        fn fmt_rec(
+impl<W: IoWrite> PrintSet<W> for Ruddy {
+    fn print(&self, bdd: Bdd, f: &mut W) -> IoResult<()> {
+        fn fmt_rec<W: IoWrite>(
             ruddy: &Ruddy,
-            f: &mut dyn Write,
+            f: &mut W,
             chars: &mut Vec<char>,
             _bdd: Bdd,
             curr: u32,
-        ) -> std::fmt::Result {
+        ) -> IoResult<()> {
             if curr == ruddy.var_num {
                 for c in chars.iter().take(ruddy.var_num as usize) {
-                    f.write_char(*c)?;
+                    f.write_fmt(format_args!("{}", c))?;
                 }
-                f.write_str("\n")?;
+                f.write_fmt(format_args!("\n"))?;
                 return Ok(());
             }
             let level = ruddy.nodes[_bdd].level;
@@ -950,7 +950,7 @@ impl PrintSet for Ruddy {
                 if bdd == 0 { "FALSE\n" } else { "TRUE\n" }
             ))?;
         } else {
-            let mut set_chars: Vec<char> = vec![0 as char; self.var_num as usize];
+            let mut set_chars: Vec<char> = vec!['-'; self.var_num as usize];
             fmt_rec(self, f, &mut set_chars, bdd, 0)?;
         }
         Ok(())
@@ -958,6 +958,9 @@ impl PrintSet for Ruddy {
 }
 #[cfg(test)]
 mod tests {
+    use flate2::Compression;
+    use std::str::from_utf8;
+
     use super::*;
     use crate::BddOp;
 
@@ -970,14 +973,15 @@ mod tests {
         let b = manager.get_nvar(1);
         let c = manager.get_nvar(2);
 
-        let mut buf = String::new();
+        let mut buf = Vec::new();
+
         let and_ab = manager.and(a, b);
         manager.ref_bdd(and_ab);
         let and_abc = manager.and(and_ab, c);
         manager.ref_bdd(and_abc);
 
-        manager.print(&mut buf, and_abc).unwrap();
-        assert_eq!(buf, "000\n");
+        manager.print(and_abc, &mut buf).unwrap();
+        assert_eq!(from_utf8(&buf).unwrap(), "000\n");
 
         manager.deref_bdd(and_ab);
         manager.deref_bdd(and_abc);
@@ -992,14 +996,15 @@ mod tests {
         let nb = manager.get_nvar(1);
         let _c = manager.get_var(2);
 
-        let mut buf = String::new();
+        let mut buf = Vec::new();
+
         let or_a_nb = manager.and(a, nb);
         manager.ref_bdd(or_a_nb);
         let comp = manager.comp(a, or_a_nb);
         manager.ref_bdd(comp);
 
-        manager.print(&mut buf, comp).unwrap();
-        assert_eq!(buf, "11*\n");
+        manager.print(comp, &mut buf).unwrap();
+        assert_eq!(from_utf8(&buf).unwrap(), "11*\n");
 
         manager.deref_bdd(or_a_nb);
         manager.deref_bdd(comp);
@@ -1062,11 +1067,11 @@ mod tests {
         manager.ref_bdd(abc);
 
         let mut buffer = Vec::new();
-        let size = manager.write_buffer(abc, &mut buffer);
-        assert_eq!(size, 4 * 12);
+        BddIO::<Vec<u8>, &[u8]>::serialize(&manager, abc, &mut buffer).unwrap();
 
         let mut another_manager = Ruddy::init(NODE_SIZE, NODE_SIZE, 3);
-        let another_abc = another_manager.read_buffer(&buffer).unwrap();
+        let another_abc =
+            BddIO::<Vec<u8>, &[u8]>::deserialize(&mut another_manager, &mut &buffer[..]).unwrap();
         another_manager.ref_bdd(another_abc);
         assert_eq!(another_manager.node_num, NODE_SIZE * 2);
 
@@ -1074,6 +1079,77 @@ mod tests {
         manager.deref_bdd(bc);
         manager.deref_bdd(abc);
         another_manager.deref_bdd(another_abc);
+    }
+
+    #[test]
+    fn test_ruddy_io_compressed() {
+        const NODE_SIZE: u32 = 100;
+        const CACHE_SIZE: u32 = 10;
+        const VAR_NUM: u32 = 32;
+
+        let mut manager = Ruddy::init(NODE_SIZE, CACHE_SIZE, VAR_NUM);
+        let mut and_all: Bdd = manager.get_true();
+        let mut tmp: Bdd;
+        for i in 0..VAR_NUM {
+            let var = manager.get_var(i as u16);
+            tmp = manager.and(and_all, var);
+            manager.ref_bdd(tmp);
+            manager.deref_bdd(and_all);
+            and_all = tmp;
+        }
+
+        let mut encoder = flate2::write::DeflateEncoder::new(Vec::new(), Compression::fast());
+        BddIO::<flate2::write::DeflateEncoder<Vec<u8>>, flate2::read::DeflateDecoder<&[u8]>>::serialize(&manager, and_all, &mut encoder).unwrap();
+        let buffer = encoder.finish().unwrap();
+        manager.deref_bdd(and_all);
+        println!("Compressed size: {}", buffer.len());
+
+        let mut another_manager = Ruddy::init(NODE_SIZE, CACHE_SIZE, VAR_NUM);
+        let mut decoder = flate2::read::DeflateDecoder::new(&buffer[..]);
+        let another_and_all = BddIO::<
+            flate2::write::DeflateEncoder<Vec<u8>>,
+            flate2::read::DeflateDecoder<&[u8]>,
+        >::deserialize(&mut another_manager, &mut decoder)
+        .unwrap();
+
+        // print to stdout to make sure the BDD is correct
+        // let mut stdout = std::io::stdout();
+        // another_manager.print(another_and_all, &mut stdout).unwrap();
+
+        another_manager.deref_bdd(another_and_all);
+    }
+
+    #[test]
+    fn test_ruddy_io_uncompressed() {
+        const NODE_SIZE: u32 = 100;
+        const CACHE_SIZE: u32 = 10;
+        const VAR_NUM: u32 = 32;
+
+        let mut manager = Ruddy::init(NODE_SIZE, CACHE_SIZE, VAR_NUM);
+        let mut and_all: Bdd = manager.get_true();
+        let mut tmp: Bdd;
+        for i in 0..VAR_NUM {
+            let var = manager.get_var(i as u16);
+            tmp = manager.and(and_all, var);
+            manager.ref_bdd(tmp);
+            manager.deref_bdd(and_all);
+            and_all = tmp;
+        }
+
+        let mut buffer = Vec::new();
+        BddIO::<Vec<u8>, &[u8]>::serialize(&manager, and_all, &mut buffer).unwrap();
+        manager.deref_bdd(and_all);
+        println!("Uncompressed size: {}", buffer.len());
+
+        let mut another_manager = Ruddy::init(NODE_SIZE, CACHE_SIZE, VAR_NUM);
+        let another_and_all =
+            BddIO::<Vec<u8>, &[u8]>::deserialize(&mut another_manager, &mut &buffer[..]).unwrap();
+
+        // print to stdout to make sure the BDD is correct
+        // let mut stdout = std::io::stdout();
+        // another_manager.print(another_and_all, &mut stdout).unwrap();
+
+        another_manager.deref_bdd(another_and_all);
     }
 
     #[test]
@@ -1092,15 +1168,16 @@ mod tests {
         let abc = manager.or(ab, bc);
         manager.ref_bdd(abc);
 
-        let mut buf = String::new();
-        PrintSet::print(&manager, &mut buf, manager.get_true()).unwrap();
-        assert_eq!(buf, "TRUE\n");
+        let mut buf = Vec::new();
+
+        PrintSet::print(&manager, manager.get_true(), &mut buf).unwrap();
+        assert_eq!(from_utf8(&buf).unwrap(), "TRUE\n");
         buf.clear();
-        PrintSet::print(&manager, &mut buf, manager.get_false()).unwrap();
-        assert_eq!(buf, "FALSE\n");
+        PrintSet::print(&manager, manager.get_false(), &mut buf).unwrap();
+        assert_eq!(from_utf8(&buf).unwrap(), "FALSE\n");
         buf.clear();
-        PrintSet::print(&manager, &mut buf, abc).unwrap();
-        assert_eq!(buf, "011\n11*\n");
+        PrintSet::print(&manager, abc, &mut buf).unwrap();
+        assert_eq!(from_utf8(&buf).unwrap(), "011\n11*\n");
 
         manager.deref_bdd(ab);
         manager.deref_bdd(bc);
@@ -1123,21 +1200,21 @@ mod tests {
         let abc = manager.or(ab, bc);
         manager.ref_bdd(abc);
 
-        let mut buf = String::new();
+        let mut buf = Vec::new();
 
         let exist_a = manager.exist(abc, a);
-        PrintSet::print(&manager, &mut buf, exist_a).unwrap();
-        assert_eq!(buf, "*1*\n");
+        PrintSet::print(&manager, exist_a, &mut buf).unwrap();
+        assert_eq!(from_utf8(&buf).unwrap(), "*1*\n");
         buf.clear();
 
         let exist_ab = manager.exist(abc, ab);
-        PrintSet::print(&manager, &mut buf, exist_ab).unwrap();
-        assert_eq!(buf, "TRUE\n");
+        PrintSet::print(&manager, exist_ab, &mut buf).unwrap();
+        assert_eq!(from_utf8(&buf).unwrap(), "TRUE\n");
         buf.clear();
 
         let exist_b = manager.exist(abc, b);
-        PrintSet::print(&manager, &mut buf, exist_b).unwrap();
-        assert_eq!(buf, "0*1\n1**\n");
+        PrintSet::print(&manager, exist_b, &mut buf).unwrap();
+        assert_eq!(from_utf8(&buf).unwrap(), "0*1\n1**\n");
         buf.clear();
 
         manager.deref_bdd(ab);
@@ -1161,20 +1238,20 @@ mod tests {
         let abc = manager.and(ab, bc);
         manager.ref_bdd(abc);
 
-        let mut buf = String::new();
+        let mut buf = Vec::new();
 
-        PrintSet::print(&manager, &mut buf, ab).unwrap();
-        assert_eq!(buf, "01*\n1**\n");
+        PrintSet::print(&manager, ab, &mut buf).unwrap();
+        assert_eq!(from_utf8(&buf).unwrap(), "01*\n1**\n");
         buf.clear();
 
         let forall_a = manager.forall(ab, a);
-        PrintSet::print(&manager, &mut buf, forall_a).unwrap();
-        assert_eq!(buf, "*1*\n");
+        PrintSet::print(&manager, forall_a, &mut buf).unwrap();
+        assert_eq!(from_utf8(&buf).unwrap(), "*1*\n");
         buf.clear();
 
         let forall_c = manager.forall(ab, c);
-        PrintSet::print(&manager, &mut buf, forall_c).unwrap();
-        assert_eq!(buf, "01*\n1**\n");
+        PrintSet::print(&manager, forall_c, &mut buf).unwrap();
+        assert_eq!(from_utf8(&buf).unwrap(), "01*\n1**\n");
         buf.clear();
 
         manager.deref_bdd(ab);
