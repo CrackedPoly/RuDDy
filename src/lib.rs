@@ -7,8 +7,15 @@ mod ruddy;
 pub use ruddy::Ruddy;
 use std::io::{Read as IoRead, Result as IoResult, Write as IoWrite};
 
+/// BDD type (alias of u32).
+/// # Why choose u32?
+/// u32 is used in RuDDy to index BDD node in hash table. The reason to choose u32 other than usize
+/// or u16 is that u32 is small in bytes while not possibly exceed its max. The maximum memory
+/// usage of nodes supported by u32 is 2^32 * (20 + 2) / 2^30 = 88 GB, which is too much for most
+/// cases.
 pub type Bdd = u32;
 
+/// Supported BDD operations.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum BddOpType {
     Not,
@@ -19,7 +26,8 @@ pub enum BddOpType {
     QuantForall,
 }
 
-pub trait BddManager {
+/// BDD manager interface.
+pub trait BddManager: BddOp {
     fn init(node_num: u32, cache_size: u32, var_num: u32) -> Self;
     fn get_var(&self, var: u16) -> Bdd;
     fn get_nvar(&self, var: u16) -> Bdd;
@@ -37,6 +45,7 @@ pub trait BddManager {
     fn gc(&mut self) -> usize;
 }
 
+/// Apply BDD operations.
 pub trait BddOp {
     // propositional logic operations
     fn not(&mut self, bdd: Bdd) -> Bdd;
@@ -49,11 +58,17 @@ pub trait BddOp {
     fn forall(&mut self, bdd: Bdd, cube: Bdd) -> Bdd;
 }
 
+/// Serialize/Deserialize BDD between different instances.
 pub trait BddIO<W: IoWrite, R: IoRead> {
+    /// Serialize to writer.
     fn serialize(&self, bdd: Bdd, writer: &mut W) -> IoResult<()>;
+    /// Deserialize from reader, the returned BDD is reference counted, no need to ref it.
     fn deserialize(&mut self, reader: &mut R) -> IoResult<Bdd>;
 }
 
+/// Print BDD in human-understandable format.
 pub trait PrintSet<W: IoWrite> {
+    // print the BDD in the format of unions of cubes to help debugging. The writer is usually a
+    // string or stdout.
     fn print(&self, bdd: Bdd, writer: &mut W) -> IoResult<()>;
 }

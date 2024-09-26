@@ -34,6 +34,7 @@ macro_rules! is_marked {
     };
 }
 
+/// BDD engine implementation.
 pub struct Ruddy {
     nodes: Vec32<NodeStatic>,
     refs: Vec32<NodeRef>,
