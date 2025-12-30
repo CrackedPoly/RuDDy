@@ -808,18 +808,6 @@ impl BddOp for Ruddy {
 impl Debug for Ruddy {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Ruddy Debug Information")?;
-        for i in 0..self.node_num {
-            f.write_fmt(format_args!(
-                "idx: {}, level: {}, low: {}, high: {}, ref: {}, next: {}, hash: {}\n",
-                i,
-                self.nodes[i].level,
-                self.nodes[i].low,
-                self.nodes[i].high,
-                self.refs[i].ref_cnt,
-                self.links[i].next,
-                self.links[i].hash
-            ))?;
-        }
 
         f.write_fmt(format_args!("free_node_ptr: {:?}\n", self.free_node_ptr))?;
         f.write_fmt(format_args!("free_node_num: {:?}\n", self.free_node_num))?;
